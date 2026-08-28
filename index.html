@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1,  viewport-fit=cover">
+  <title>IVS Admission Registration Form</title>
+
+  <link rel="stylesheet" href="styles.css"/>
+
+  <!-- PDF libs -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <div class="wrapper">
+    <form id="admissionForm">
+      <!-- ================= PAGE 1 ================= -->
+      <div class="page" id="page1">
+        <!-- NEW: single banner image -->
+  <div class="header-banner">
+    <img src="img/ivs-banner.png"
+         alt="IQRA Virtual School — Al Furqan Children Academy"
+         loading="eager"
+         decoding="sync"
+         crossorigin="anonymous" />
+  </div>
+  <h1 class="title">Admission Registration <span class="title-accent">Form</span></h1>
+
+
+  <!-- keep your existing meta (Session + Date) that comes after -->
+  <div class="meta meta--top">
+    <!-- SESSION chip and DATE boxes (جوں کے توں) -->
+  </div>
+</header>
+          <div class="meta meta--top">
+            <div class="field-stack">
+              <div class="stack-label">SESSION:</div>
+              <div class="stack-value" id="sessionText">--</div>
+              <input type="hidden" id="session" name="session" value="">
+              <div class="stack-underline"></div>
+            </div>
+
+            <div class="field-stack">
+              <div class="stack-label">DATE OF REGISTRATION</div>
+              <div class="date-boxes" id="regBoxes">
+                <input class="box" maxlength="1" id="rb1" data-next="rb2" inputmode="numeric" />
+                <input class="box" maxlength="1" id="rb2" data-next="rb3" data-prev="rb1" inputmode="numeric" />
+                <span class="slash">/</span>
+                <input class="box" maxlength="1" id="rb3" data-next="rb4" data-prev="rb2" inputmode="numeric" />
+                <input class="box" maxlength="1" id="rb4" data-next="rb5" data-prev="rb3" inputmode="numeric" />
+                <span class="slash">/</span>
+                <input class="box" maxlength="1" id="rb5" data-next="rb6" data-prev="rb4" inputmode="numeric" />
+                <input class="box" maxlength="1" id="rb6" data-next="rb7" data-prev="rb5" inputmode="numeric" />
+                <input class="box" maxlength="1" id="rb7" data-next="rb8" data-prev="rb6" inputmode="numeric" />
+                <input class="box" maxlength="1" id="rb8" data-prev="rb7" inputmode="numeric" />
+              </div>
+              <input type="hidden" id="regDate" name="regDate" />
+            </div>
+          </div>
+        </header>
+
+        <section class="section" id="studentInfoSection">
+  <h3>Student Info</h3>
+  <div class="content">
+
+    <!-- Student Details Row -->
+    <div class="grid cols-2">
+      <div>
+        <div class="label">Student Name</div>
+        <input id="studentName" class="input" required>
+      </div>
+
+      <div>
+        <div class="label">Gender</div>
+        <div class="inline" style="margin-top:6px;">
+          <label style="margin-right:12px;">
+            <input type="radio" name="gender" value="Male" style="transform:scale(1.1);"> Male
+          </label>
+          <label>
+            <input type="radio" name="gender" value="Female" style="transform:scale(1.1);"> Female
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOB and Grade -->
+    <div class="grid cols-2" style="margin-top:10px;">
+      <div>
+        <div class="label">Date of Birth</div>
+        <input id="dob" class="input" type="date">
+      </div>
+
+      <div>
+        <div class="label">Grade:</div>
+        <select id="gradeSelect" class="input" required>
+          <option value="">Select Grade</option>
+          <option value="FS 1">FS 1</option>
+          <option value="FS 2">FS 2</option>
+          <option value="FS 3">FS 3</option>
+          <option value="Grade 1">Grade 1</option>
+          <option value="Grade 2">Grade 2</option>
+          <option value="Grade 3">Grade 3</option>
+          <option value="Grade 4">Grade 4</option>
+          <option value="Grade 5">Grade 5</option>
+          <option value="Grade 6">Grade 6</option>
+          <option value="Grade 7">Grade 7</option>
+          <option value="Grade 8 (FBISE)">Grade 8 (FBISE)</option>
+          <option value="Grade 8 (IGCSE / O&#39;Level)">Grade 8 (IGCSE / O'Level)</option>
+          <option value="Grade 9 (FBISE)">Grade 9 (FBISE)</option>
+          <option value="Grade 9 (IGCSE / O&#39;Level)">Grade 9 (IGCSE / O'Level)</option>
+          <option value="Grade 10 (FBISE)">Grade 10 (FBISE)</option>
+          <option value="Grade 10 (IGCSE / O&#39;Level)">Grade 10 (IGCSE / O'Level)</option>
+          <option value="Grade 11 (FBISE)">Grade 11 (FBISE)</option>
+          <option value="Grade 11 (IGCSE, O / A&#39;Level)">Grade 11 (IGCSE, O / A'Level)</option>
+          <option value="Grade 12 (FBISE)">Grade 12 (FBISE)</option>
+        </select>
+      </div>
+    </div>
+
+    <hr class="sep">
+    <!-- ADD ANOTHER CHILD BUTTON -->
+<div style="text-align:center; margin:10px 0;">
+  <button type="button" id="addChildBtn" class="btn hide-in-pdf">+ Add Another Child</button>
+</div>
+
+<div id="childTemplate" style="display:none;">
+  <hr class="sep">
+  <div class="child-block">
+    <div class="grid cols-2">
+      <div>
+        <div class="label">Student Name</div>
+        <input class="input studentName" placeholder="Student Name" required>
+      </div>
+
+      <div>
+        <div class="label">Gender</div>
+        <div class="inline" style="margin-top:6px;">
+          <label style="margin-right:12px;">
+            <input type="radio" name="gender__INDEX__" value="Male" style="transform:scale(1.1);"> Male
+          </label>
+          <label>
+            <input type="radio" name="gender__INDEX__" value="Female" style="transform:scale(1.1);"> Female
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:10px;">
+      <div>
+        <div class="label">Date of Birth</div>
+        <input class="input dob" type="date" required>
+      </div>
+
+      <div>
+        <div class="label">Grade:</div>
+        <select id="childGrade" name="childGrade" class="input" style="margin-bottom:10px;">
+          <option value="">Select Grade</option>
+          <option value="FS 1">FS 1</option>
+          <option value="FS 2">FS 2</option>
+          <option value="FS 3">FS 3</option>
+          <option value="Grade 1">Grade 1</option>
+          <option value="Grade 2">Grade 2</option>
+          <option value="Grade 3">Grade 3</option>
+          <option value="Grade 4">Grade 4</option>
+          <option value="Grade 5">Grade 5</option>
+          <option value="Grade 6">Grade 6</option>
+          <option value="Grade 7">Grade 7</option>
+          <option value="Grade 8(Fed)">Grade 8 (FBISE)</option>
+          <option value="Grade 8(IGCSE)">Grade 8 (IGCSE / O'Level)</option>
+          <option value="Grade 9(Fed)">Grade 9 (FBISE)</option>
+          <option value="Grade 9(IGCSE)">Grade 9 (IGCSE / O'Level)</option>
+          <option value="Grade 10(Fed)">Grade 10 (FBISE)</option>
+          <option value="Grade 10(IGCSE)">Grade 10 (IGCSE / O'Level)</option>
+          <option value="Grade 11(Fed)">Grade 11 (FBISE)</option>
+          <option value="Grade 11(IGCSE)">Grade 11 (IGCSE, O / A'Level)</option>
+          <option value="Grade 12(Fed)">Grade 12 (FBISE)</option>
+        </select>
+      </div>
+    </div>
+    <div style="text-align:right; margin-top:8px;">
+  <button type="button" class="btn secondary removeChildBtn hide-in-pdf">
+    Remove Child
+  </button>
+</div>
+
+  </div>
+</div>
+</section>
+<!-- STUDENT SUMMARY (auto generated below main form) -->
+<section class="section" id="studentSummarySection">
+  <h3>Children Summary</h3>
+  <div class="content" id="studentSummary"></div>
+</section>
+   <!-- NEW: Father Information (اپنا الگ سیکشن) -->
+<section class="section" id="fatherInfoSection">
+  <h3>Father Info</h3>
+  <div class="content" id="parentInfoSection">
+    <div class="grid cols-2">
+      <div>
+        <div class="label">Father Name</div>
+        <input id="fatherName" class="input">
+      </div>
+      <div>
+        <div class="label">Guardian WhatsApp #</div>
+        <!-- ✅ NEW WRAPPER WITH DROPDOWN -->
+        <div class="phone-wrapper" style="position:relative;">
+          <input
+            id="gWhats"
+            class="input"
+            type="tel"
+            autocomplete="tel"
+            placeholder="Select country & enter number"
+          >
+          <div
+            id="countryDropdown"
+            class="country-dropdown hide-in-pdf"
+            style="display:none; position:absolute; top:100%; left:0; right:0; background:#ffffff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 10px 25px rgba(15,23,42,0.12); padding:6px; margin-top:4px; max-height:240px; overflow:auto; z-index:40;"
+          >
+            <input
+              type="text"
+              id="countrySearch"
+              class="input"
+              placeholder="Search country..."
+              style="margin-bottom:6px; font-size:13px; padding:4px 8px;"
+            >
+            <div id="countryList" class="country-list"></div>
+          </div>
+        </div>
+        <!-- ✅ END NEW WRAPPER -->
+      </div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:10px;">
+  <div>
+    <div class="label">Religion</div>
+    <input id="religion" class="input">
+  </div>
+  <div>
+    <div class="label">Father Occupation</div>
+    <input id="fOcc" class="input">
+  </div>
+</div>
+
+<div class="grid cols-2" style="margin-top:10px;">
+  <div>
+    <div class="label">Email Address</div>
+    <input id="fatherEmail" class="input" type="email" placeholder="Enter email address">
+  </div>
+  <div>
+    <div class="label">Nationality</div>
+    <input id="nation" class="input">
+  </div>
+</div>
+  </div>
+</section>
+
+
+
+        <section class="section">
+          <h3>Address Details</h3>
+          <div class="content">
+            <div class="grid">
+              <div><div class="label">Present Address</div><textarea id="addr" class="textarea"></textarea></div>
+            </div>
+            <div class="grid cols-3">
+              <div><div class="label">The City</div><input id="city" class="input"></div>
+              <div><div class="label">Present State</div><input id="state" class="input"></div>
+               <div><div class="label">Secondary Contact</div><input id="sContact" class="input"></div>
+            </div>
+            <div class="grid cols-2">
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ================= PAGE 2 ================= -->
+      <div class="page" id="page2">
+        <div class="title" style="margin-top:18px;">DECLARATION OF PARENT/GUARDIAN</div>
+
+        <div class="badge-row">
+          <div class="badge"><h4>Affiliated with PSRA & Federal Board</h4></div>
+          <div class="badge"><h4>Based on British & Federal Board Curriculum</h4></div>
+          <div class="badge"><h3>Students across 50+ countries</h3></div>
+        </div>
+
+  <section class="section">
+  <style>
+    .fee-policy-link {
+      color: #1d4ed8;
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .fee-policy-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      z-index: 99999;
+      font-family: inherit;
+    }
+
+    .fee-policy-modal.show {
+      display: block;
+    }
+
+    .fee-policy-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.58);
+    }
+
+    .fee-policy-box {
+      position: relative;
+      width: min(92%, 720px);
+      max-height: 86vh;
+      overflow-y: auto;
+      margin: 5vh auto;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 22px 24px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+      z-index: 2;
+      color: #0f172a;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .fee-policy-box h2 {
+      margin: 0 0 14px;
+      color: #b1122d;
+      font-size: 26px;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    .fee-policy-box h3 {
+      margin: 18px 0 8px;
+      color: #111827;
+      font-size: 18px;
+    }
+
+    .fee-policy-box ul,
+    .fee-policy-box ol {
+      margin: 8px 0 14px;
+      padding-left: 22px;
+    }
+
+    .fee-policy-box li {
+      margin-bottom: 8px;
+    }
+
+    .fee-policy-close {
+      position: absolute;
+      top: 10px;
+      right: 14px;
+      border: none;
+      background: transparent;
+      color: #334155;
+      font-size: 30px;
+      line-height: 1;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .fee-policy-note {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: #f8fafc;
+      border-left: 4px solid #b1122d;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    @media print {
+      .fee-policy-modal {
+        display: none !important;
+      }
+    }
+  </style>
+
+  <div class="content declaration-list">
+    <p class="decl-note">
+      <strong>Note:</strong> After reading the declaration form carefully, kindly click “Agree” to confirm your acknowledgment.
+    </p>
+
+    <ol class="decl-list">
+      <li>I understand that admission to Al Furqan Children (AFCA) is based on availability and fulfillment of all admission requirements.</li>
+      <li>I agree to ensure my child’s regular attendance in all scheduled classes and to maintain proper discipline throughout the academic year.</li>
+      <li>I understand that mobile phone use during class, abusive language, or any form of disciplinary misconduct will not be tolerated.</li>
+      <li>I will ensure that my child always behaves respectfully toward teachers, staff, and fellow students.</li>
+      <li>I acknowledge that contacting teachers or students outside AFCA-approved platforms is strictly prohibited and may result in termination of services.</li>
+      <li>In case of any dispute, I will communicate directly with the school management and will not involve external parties or legal authorities.</li>
+      <li>I understand that late fee payments may result in restricted access to classes or withheld academic reports.</li>
+      <li>I acknowledge that all course materials and resources provided by AFCA are for my child’s personal use only and must not be shared externally.</li>
+      <li>I agree to monitor my child’s academic progress and maintain regular communication with the school for updates.</li>
+      <li>
+        I have read and understood the
+        <a href="#" id="openFeePolicy" class="fee-policy-link">School Fee Policy</a>
+        and agree to follow the school fee rules.
+      </li>
+      <li>I have read and understood all the rules and regulations of AFCA and agree to follow them to support my child’s academic success.</li>
+      <li class="agree-line">
+        <label><input id="declMaster" type="checkbox"> Agree to the declaration above.</label>
+      </li>
+    </ol>
+  </div>
+
+  <!-- Fee Policy Popup -->
+  <div id="feePolicyModal" class="fee-policy-modal" aria-hidden="true">
+    <div id="feePolicyBackdrop" class="fee-policy-backdrop"></div>
+
+    <div class="fee-policy-box" role="dialog" aria-modal="true" aria-labelledby="feePolicyTitle">
+      <button type="button" id="closeFeePolicy" class="fee-policy-close" aria-label="Close Fee Policy">
+        ×
+      </button>
+
+      <h2 id="feePolicyTitle">School Fee Policy</h2>
+
+      <h3>Advance Fee Discount Plan</h3>
+      <ul>
+        <li><strong>12 Months Advance Fee Payment:</strong> Get Discount One Month Tuition Fee.</li>
+        <li><strong>6 Months Advance Fee Payment:</strong> Get 50% Discount on One Month Tuition Fee.</li>
+        <li><strong>4 Months Advance Fee Payment:</strong> Get 15% Discount on One Month Tuition Fee.</li>
+      </ul>
+
+      <h3>General Terms & Conditions</h3>
+      <ol>
+        <li>Monthly tuition fee must be paid on or before the 10th of each month. Late payment may result in additional charges according to school policy.</li>
+        <li>Parents who pay 12 months’ fee in advance will receive 1 month fee waiver or discount.</li>
+        <li>Parents who pay 6 months’ fee in advance will receive 50% discount on one month’s tuition fee.</li>
+        <li>Parents who pay 4 months’ fee in advance will receive 15% discount on one month’s tuition fee.</li>
+        <li>Admission fee and annual charges, if applicable, are non-refundable after admission confirmation.</li>
+        <li>Fee once deposited will not be adjusted or refunded except under approved school rules.</li>
+        <li>In case of non-payment beyond the allowed period, the school reserves the right to suspend classes, exams, or re-admission procedures according to school regulations.</li>
+        <li>The school management reserves the right to revise fee policy with prior notice.</li>
+        <li>This offer cannot be combined with any other discount or concession.</li>
+      </ol>
+
+      <div class="fee-policy-note">
+        <strong>Note:</strong> Discount is applicable only on advance fee submission.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function initFeePolicyPopup() {
+      const openBtn = document.getElementById("openFeePolicy");
+      const modal = document.getElementById("feePolicyModal");
+      const closeBtn = document.getElementById("closeFeePolicy");
+      const backdrop = document.getElementById("feePolicyBackdrop");
+
+      if (!openBtn || !modal || !closeBtn || !backdrop) return;
+
+      function openModal(event) {
+        if (event) event.preventDefault();
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+      }
+
+      function closeModal() {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+      }
+
+      openBtn.addEventListener("click", openModal);
+      closeBtn.addEventListener("click", closeModal);
+      backdrop.addEventListener("click", closeModal);
+
+      document.addEventListener("keydown", function(event) {
+        if (event.key === "Escape" && modal.classList.contains("show")) {
+          closeModal();
+        }
+      });
+    })();
+  </script>
+</section>
+
+            <!-- Signature area (compact + instructions on right) -->
+            <div class="signature">
+              <div class="sig-row">
+                <div class="sig-col">
+                  <div class="label">Signature of Parent/Guardian (draw here)</div>
+                  <canvas id="sig" width="480" height="140"></canvas>
+                  <div class="sig-actions">
+                    <button id="clearSig" type="button" class="btn secondary">Clear Signature</button>
+                  </div>
+                </div>
+
+            <aside class="sig-notes hide-in-pdf">
+       <div class="sig-notes-title">
+          <h4>How to complete your admission</h4>
+       </div>
+
+       <ol class="sig-steps">
+       <li>To complete your admission, you must tick <strong>Agree</strong> box.</li>
+       <li>Draw your signature.</li>
+       <li>Click <strong>Save filled form as PDF</strong>.</li>
+       <li>When WhatsApp opens, send the PDF with the file <strong>attached</strong>.</li>
+       <li>That’s it — your admission request will be completed.</li>
+       </ol>
+
+  <div class="sig-hint">
+     <h4>Note:</h4>
+        If you’re not redirected to WhatsApp automatically, please send the filled PDF on the number from which you received the link.
+  </div>
+</aside>
+            <div class="actions hide-in-pdf" style="margin-top:14px">
+              <button id="btnPdf" class="btn" type="button">Save filled form as PDF</button>
+            </div>
+          </div>
+        <div id="processedBy" class="processed-by">
+             Processed by: <strong id="processedByName">—</strong>
+        </div>
+        </section>
+      </div> 
+    </form>
+  </div>
+
+  <!-- Your main JS -->
+ <script src="script.js?v=20260709-fix3" defer></script>
+
+
+  <!-- Date boxes -> hidden regDate (safe, tiny, and FIXED) -->
+  <script>
+  (function initDateBoxes(){
+    const container = document.getElementById('regBoxes');
+    if (!container) return;
+
+    const boxes  = Array.from(container.querySelectorAll('.box'));
+    const hidden = document.getElementById('regDate');
+
+    function normalize(){
+      const v = boxes.map(b => (b.value || '').replace(/\D/g,'')).join('');
+      if (v.length === 8) {
+        const mm = v.slice(0,2), dd = v.slice(2,4), yyyy = v.slice(4,8);
+        hidden.value = yyyy + '-' + mm + '-' + dd;
+      } else {
+        hidden.value = '';
+      }
+    }
+
+    boxes.forEach((b) => {
+      b.addEventListener('input', (e) => {
+        e.target.value = e.target.value.replace(/\D/g,'').slice(0,1);
+        if (e.target.value && b.dataset.next) {
+          const nx = document.getElementById(b.dataset.next);
+          if (nx) nx.focus();
+        }
+        normalize();
+      });
+
+      b.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !b.value && b.dataset.prev) {
+          const pv = document.getElementById(b.dataset.prev);
+          if (pv) pv.focus();
+        }
+      });
+
+      b.addEventListener('paste', (e) => {
+        const text = (e.clipboardData || window.clipboardData)
+          .getData('text').replace(/\D/g,'').slice(0,8);
+        if (!text) return;
+        e.preventDefault();
+        for (let i = 0; i < text.length && i < boxes.length; i++) boxes[i].value = text[i];
+        normalize();
+        boxes[Math.min(text.length, boxes.length - 1)].focus();
+      });
+    });
+  })();
+  </script>
+
+  <!-- Info Navbar -->
+  <nav class="info-bar" role="contentinfo">
+    <div class="info-wrap">
+      <span><strong>Administration Contact/WhatsApp #:</strong> +92 335 524 5551</span>
+    </div>
+  </nav>
+</body>
+</html>
