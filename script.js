@@ -1,25 +1,30 @@
 /* public/script.js
-   IVS Admission Form — signature pad + PDF export + print + WhatsApp (app) share
+   AFCA / IVS Admission Form
+   Signature Pad + Student Summary + PDF Export + WhatsApp Share
+
+   FRONTEND-ONLY VERSION
+
+   IMPORTANT:
+   - No admission data is sent to any API.
+   - No admission data is stored in any database.
+   - Data exists only in the browser while the form is open.
+   - Clicking Save creates the PDF only.
 */
-const DASHBOARD_ADMISSIONS_API = "https://dashboard.iqravs.com/api/admissions";
-// ✅ SAME value jo .env me hai
-const DASHBOARD_API_KEY = "ivs_super_secret_2025_123456";
-
-function cleanPhoneNumber(value) {
-  return String(value || "").replace(/\s+/g, "");
-}
-
 
 document.addEventListener("DOMContentLoaded", () => {
   initSignaturePad();
   wireButtons();
-  autoFillCurrentSession();  // auto-fill SESSION like 2026-27, 2027-28
-  initSingleGradeSelect();   // make Grade checkboxes single-select
-  autoFillRegDate();         // auto-fill DATE OF REGISTRATION with today's date
-  initDeclarationMaster();   // declaration master checkbox
-  initGuardianWhatsAppDropdown(); // country dropdown for Guardian WhatsApp
+  autoFillCurrentSession();
+  initSingleGradeSelect();
+  autoFillRegDate();
+  initDeclarationMaster();
+  initGuardianWhatsAppDropdown();
 });
-/* ---------- NEW: Auto-fill SESSION based on current year ---------- */
+
+/* =========================================================
+   SESSION
+========================================================= */
+
 function getCurrentAcademicSession() {
   const currentYear = new Date().getFullYear();
   const nextYear = currentYear + 1;
@@ -34,1182 +39,2171 @@ function autoFillCurrentSession() {
   const sessionValue = getCurrentAcademicSession();
 
   const sessionText = document.getElementById("sessionText");
-  if (sessionText) sessionText.textContent = sessionValue;
+
+  if (sessionText) {
+    sessionText.textContent = sessionValue;
+  }
 
   const sessionInput = document.getElementById("session");
-  if (sessionInput) sessionInput.value = sessionValue;
+
+  if (sessionInput) {
+    sessionInput.value = sessionValue;
+  }
 }
-/* ---------- NEW: Auto-fill DATE OF REGISTRATION (MM/DD/YYYY boxes) ---------- */
+
+/* =========================================================
+   REGISTRATION DATE
+========================================================= */
+
 function autoFillRegDate() {
   const container = document.getElementById("regBoxes");
+
   if (!container) return;
 
-  const boxes = Array.from(container.querySelectorAll(".box"));
+  const boxes = Array.from(
+    container.querySelectorAll(".box")
+  );
+
   if (!boxes.length) return;
 
-  // If user already typed something, don't overwrite
-  const anyFilled = boxes.some((b) => (b.value || "").trim() !== "");
+  // Do not overwrite a date already entered.
+  const anyFilled = boxes.some(
+    (box) => (box.value || "").trim() !== ""
+  );
+
   if (anyFilled) return;
 
   const now = new Date();
-  // current date -> MM/DD/YYYY (boxes expect this order)
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
+
+  const mm = String(now.getMonth() + 1).padStart(
+    2,
+    "0"
+  );
+
+  const dd = String(now.getDate()).padStart(
+    2,
+    "0"
+  );
+
   const yyyy = String(now.getFullYear());
 
-  const seq = (mm + dd + yyyy).split(""); // "MMDDYYYY"
-  boxes.forEach((b, i) => {
-    if (i < seq.length) b.value = seq[i];
+  // MMDDYYYY
+  const sequence = (
+    mm +
+    dd +
+    yyyy
+  ).split("");
+
+  boxes.forEach((box, index) => {
+    if (index < sequence.length) {
+      box.value = sequence[index];
+    }
   });
 
-  // hidden ISO for backend if present
-  const hidden = document.getElementById("regDate");
-  if (hidden) hidden.value = `${yyyy}-${mm}-${dd}`;
+  const hiddenDate =
+    document.getElementById("regDate");
+
+  if (hiddenDate) {
+    hiddenDate.value =
+      `${yyyy}-${mm}-${dd}`;
+  }
 }
 
-/* ---------- 1) SIGNATURE PAD (mouse + touch) ---------- */
-let sigCanvas,
-  sigCtx,
-  isDrawing = false,
-  lastPoint = null;
+/* =========================================================
+   SIGNATURE PAD
+========================================================= */
 
-// Prevent double submit / double save
+let sigCanvas;
+let sigCtx;
+
+let isDrawing = false;
+let lastPoint = null;
+
+/*
+  Prevent multiple clicks while the PDF
+  is being generated.
+*/
 let isSubmittingAdmission = false;
 
 function initSignaturePad() {
-  sigCanvas = document.getElementById("sig");
-  if (!sigCanvas) return; // not on this page
+  sigCanvas =
+    document.getElementById("sig");
 
-  sigCtx = sigCanvas.getContext("2d");
+  if (!sigCanvas) return;
+
+  sigCtx =
+    sigCanvas.getContext("2d");
+
   sigCtx.lineWidth = 2;
   sigCtx.lineCap = "round";
   sigCtx.strokeStyle = "#0f172a";
 
-  const getPos = (e) => {
-    const t = e.touches ? e.touches[0] : e;
-    const r = sigCanvas.getBoundingClientRect();
+  const getPosition = (event) => {
+    const pointer =
+      event.touches
+        ? event.touches[0]
+        : event;
+
+    const rectangle =
+      sigCanvas.getBoundingClientRect();
+
     return {
-      x: (t.clientX - r.left) * (sigCanvas.width / r.width),
-      y: (t.clientY - r.top) * (sigCanvas.height / r.height),
+      x:
+        (pointer.clientX - rectangle.left) *
+        (sigCanvas.width / rectangle.width),
+
+      y:
+        (pointer.clientY - rectangle.top) *
+        (sigCanvas.height / rectangle.height),
     };
   };
 
-  const start = (e) => {
+  const startDrawing = (event) => {
     isDrawing = true;
-    lastPoint = getPos(e);
-    e.preventDefault();
+
+    lastPoint =
+      getPosition(event);
+
+    event.preventDefault();
   };
-  const move = (e) => {
+
+  const draw = (event) => {
     if (!isDrawing) return;
-    const p = getPos(e);
+
+    const point =
+      getPosition(event);
+
     sigCtx.beginPath();
-    sigCtx.moveTo(lastPoint.x, lastPoint.y);
-    sigCtx.lineTo(p.x, p.y);
+
+    sigCtx.moveTo(
+      lastPoint.x,
+      lastPoint.y
+    );
+
+    sigCtx.lineTo(
+      point.x,
+      point.y
+    );
+
     sigCtx.stroke();
-    lastPoint = p;
-    e.preventDefault();
+
+    lastPoint = point;
+
+    event.preventDefault();
   };
-  const end = () => {
+
+  const stopDrawing = () => {
     isDrawing = false;
     lastPoint = null;
   };
 
   // Mouse
-  sigCanvas.addEventListener("mousedown", start);
-  sigCanvas.addEventListener("mousemove", move);
-  document.addEventListener("mouseup", end);
+  sigCanvas.addEventListener(
+    "mousedown",
+    startDrawing
+  );
+
+  sigCanvas.addEventListener(
+    "mousemove",
+    draw
+  );
+
+  document.addEventListener(
+    "mouseup",
+    stopDrawing
+  );
 
   // Touch
-  sigCanvas.addEventListener("touchstart", start, { passive: false });
-  sigCanvas.addEventListener("touchmove", move, { passive: false });
-  sigCanvas.addEventListener("touchend", end);
+  sigCanvas.addEventListener(
+    "touchstart",
+    startDrawing,
+    {
+      passive: false,
+    }
+  );
 
-  // Clear
-  const clr = document.getElementById("clearSig");
-  if (clr)
-    clr.addEventListener("click", () => {
-      sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
-    });
+  sigCanvas.addEventListener(
+    "touchmove",
+    draw,
+    {
+      passive: false,
+    }
+  );
+
+  sigCanvas.addEventListener(
+    "touchend",
+    stopDrawing
+  );
+
+  // Clear Signature
+  const clearButton =
+    document.getElementById("clearSig");
+
+  if (clearButton) {
+    clearButton.addEventListener(
+      "click",
+      () => {
+        sigCtx.clearRect(
+          0,
+          0,
+          sigCanvas.width,
+          sigCanvas.height
+        );
+      }
+    );
+  }
 }
 
-/* ---------- 2) BUTTONS: PDF ---------- */
+/* =========================================================
+   SIGNATURE DATA
+========================================================= */
 
-// keep this number only for fallback text; native share lets the user pick the contact
-const SCHOOL_WHATSAPP = "923355245551"; // 92 + phone (no plus sign)
+function getSignatureDataURL() {
+  if (!sigCanvas) return "";
+
+  const blankCanvas =
+    document.createElement("canvas");
+
+  blankCanvas.width =
+    sigCanvas.width;
+
+  blankCanvas.height =
+    sigCanvas.height;
+
+  if (
+    sigCanvas.toDataURL() ===
+    blankCanvas.toDataURL()
+  ) {
+    return "";
+  }
+
+  return sigCanvas.toDataURL(
+    "image/png"
+  );
+}
+
+/* =========================================================
+   PDF BUTTON
+========================================================= */
 
 function wireButtons() {
-  const pdfBtn = document.getElementById("btnPdf");
-  if (pdfBtn)
-    pdfBtn.addEventListener("click", () => exportPdfAndOpenWhatsAppApp());
+  const pdfButton =
+    document.getElementById("btnPdf");
+
+  if (!pdfButton) return;
+
+  pdfButton.addEventListener(
+    "click",
+    exportPdfAndOpenWhatsAppApp
+  );
 }
 
 function setPdfButtonBusyState(isBusy) {
-  const btn = document.getElementById("btnPdf");
-  if (!btn) return;
+  const button =
+    document.getElementById("btnPdf");
+
+  if (!button) return;
 
   if (isBusy) {
-    btn.disabled = true;
-    btn.setAttribute("aria-disabled", "true");
-    btn.style.pointerEvents = "none";
-    btn.style.opacity = "0.6";
-    btn.dataset.originalText = btn.textContent;
-    btn.textContent = "Saving...";
+    button.disabled = true;
+
+    button.setAttribute(
+      "aria-disabled",
+      "true"
+    );
+
+    button.style.pointerEvents =
+      "none";
+
+    button.style.opacity =
+      "0.6";
+
+    button.dataset.originalText =
+      button.textContent;
+
+    button.textContent =
+      "Creating PDF...";
+
+    return;
+  }
+
+  button.disabled = false;
+
+  const master =
+    document.getElementById(
+      "declMaster"
+    );
+
+  if (
+    master &&
+    !master.checked
+  ) {
+    button.setAttribute(
+      "aria-disabled",
+      "true"
+    );
+
+    button.style.pointerEvents =
+      "none";
+
+    button.style.opacity =
+      "0.5";
   } else {
-    btn.disabled = false;
+    button.removeAttribute(
+      "aria-disabled"
+    );
 
-    const master = document.getElementById("declMaster");
-    if (master && !master.checked) {
-      btn.setAttribute("aria-disabled", "true");
-      btn.style.pointerEvents = "none";
-      btn.style.opacity = "0.5";
-    } else {
-      btn.removeAttribute("aria-disabled");
-      btn.style.pointerEvents = "auto";
-      btn.style.opacity = "1";
-    }
+    button.style.pointerEvents =
+      "auto";
 
-    if (btn.dataset.originalText) {
-      btn.textContent = btn.dataset.originalText;
-    } else {
-      btn.textContent = "Save Filled Form as PDF";
-    }
+    button.style.opacity =
+      "1";
+  }
+
+  if (
+    button.dataset.originalText
+  ) {
+    button.textContent =
+      button.dataset.originalText;
+  } else {
+    button.textContent =
+      "Save Filled Form as PDF";
   }
 }
 
-/* Utility for signature if needed elsewhere */
-function getSignatureDataURL() {
-  if (!sigCanvas) return "";
-  const blank = document.createElement("canvas");
-  blank.width = sigCanvas.width;
-  blank.height = sigCanvas.height;
-  if (sigCanvas.toDataURL() === blank.toDataURL()) return "";
-  return sigCanvas.toDataURL("image/png");
-}
+/* =========================================================
+   CREATE PDF
+========================================================= */
 
-/* ---------- 3) Build PDF from .page elements (A4, top-aligned) ---------- */
 async function buildPdfFromPages() {
-  const { jsPDF } = window.jspdf;
+  if (
+    !window.jspdf ||
+    !window.jspdf.jsPDF
+  ) {
+    throw new Error(
+      "jsPDF library is not loaded."
+    );
+  }
 
-  // Collect all children before creating PDF (optional old part, can be removed if not needed)
-  const studentBlocks = document.querySelectorAll(".child-block, .grades");
-  let extraData = "";
-  studentBlocks.forEach((block, i) => {
-    const name =
-      block.querySelector(".studentName")?.value ||
-      document.getElementById("studentName")?.value ||
-      "";
-    const dob =
-      block.querySelector(".dob")?.value ||
-      document.getElementById("dob")?.value ||
-      "";
-    const grade =
-      block.querySelector("select")?.value ||
-      document.getElementById("gradeSelect")?.value ||
-      "";
-    const gender =
-      block.querySelector('input[type="radio"]:checked')?.value ||
-      document.querySelector('input[name="gender"]:checked')?.value ||
-      "";
+  if (
+    typeof html2canvas ===
+    "undefined"
+  ) {
+    throw new Error(
+      "html2canvas library is not loaded."
+    );
+  }
 
-    if (name || dob || grade || gender) {
-      extraData += `Child ${i + 1}:\nName: ${name}\nDOB: ${dob}\nGender: ${gender}\nGrade: ${grade}\n\n`;
-    }
-  });
-  // Make sure summary is updated before PDF capture
-  if (typeof generateSummaryHTML === "function") generateSummaryHTML();
+  const { jsPDF } =
+    window.jspdf;
 
-  // Collect .page elements before hiding footer
-  const pages = Array.from(document.querySelectorAll(".page"));
-  if (!pages.length) return null;
+  /*
+    Make sure frontend student summary
+    contains the latest values before the
+    HTML is captured.
+  */
+  if (
+    typeof window.generateSummaryHTML ===
+    "function"
+  ) {
+    window.generateSummaryHTML();
+  }
 
-  // export mode: hide fixed footer
-  document.body.classList.add("pdf-export");
-  const infoBar = document.querySelector(".info-bar");
-  const prevBarDisp = infoBar ? infoBar.style.display = infoBar.style.display : null;
-  if (infoBar) infoBar.style.display = "none";
+  const pages =
+    Array.from(
+      document.querySelectorAll(
+        ".page"
+      )
+    );
 
-  // ensure images are ready (logos, etc.)
-  await Promise.all(
-    Array.from(document.images).map((img) => {
-      if (img.complete) return Promise.resolve();
-      return new Promise((res) => {
-        img.onload = img.onerror = res;
-      });
-    })
+  if (!pages.length) {
+    alert(
+      "No printable form pages were found."
+    );
+
+    return null;
+  }
+
+  /*
+    Hide non-PDF interface elements.
+  */
+  document.body.classList.add(
+    "pdf-export"
   );
 
-  const pdf = new jsPDF("p", "pt", "a4");
-  const pageW = pdf.internal.pageSize.getWidth(); // ~595pt
-  const pageH = pdf.internal.pageSize.getHeight(); // ~842pt
-  const M = 18;
+  const infoBar =
+    document.querySelector(
+      ".info-bar"
+    );
 
-  for (let i = 0; i < pages.length; i++) {
-    const el = pages[i];
+  let previousInfoBarDisplay = "";
 
-    const canvas = await html2canvas(el, {
-      scale: 2.2,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: "#ffffff",
-      logging: false,
-      windowWidth: 980,
-      scrollX: 0, // no scroll offset
-      scrollY: 0,
-    });
+  if (infoBar) {
+    previousInfoBarDisplay =
+      infoBar.style.display;
 
-    const img = canvas.toDataURL("image/jpeg", 0.95);
-    if (i > 0) pdf.addPage();
-    pdf.addImage(img, "JPEG", 0, 0, 595, 842);
-  }
-
-  // restore UI
-  if (infoBar) infoBar.style.display = prevBarDisp || "";
-  document.body.classList.remove("pdf-export");
-
-  const filename = `IVS-Admission-${new Date()
-    .toISOString()
-    .slice(0, 10)}.pdf`;
-  return { pdf, filename };
-}
-
-/* ---------- Build payload for dashboard /api/admissions ---------- */
-function buildAdmissionPayloadForDashboard() {
-  // session
-  let session =
-    document.getElementById("session")?.value?.trim() ||
-    document.getElementById("sessionText")?.textContent?.trim() ||
-    "";
-  if (!session) session = getCurrentAcademicSession();
-
-  // registration date (hidden ISO from autoFillRegDate)
-  let registration_date =
-    document.getElementById("regDate")?.value?.trim() || "";
-  if (!registration_date) {
-    const now = new Date();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    const yyyy = String(now.getFullYear());
-    registration_date = `${yyyy}-${mm}-${dd}`;
-  }
-
-  const processed_by =
-    document.getElementById("processedByName")?.textContent?.trim() || "";
-
-  const father_name =
-    document.getElementById("fatherName")?.value?.trim() || "";
-  const guardian_whatsapp =
-    cleanPhoneNumber(document.getElementById("gWhats")?.value || "");
-  const religion =
-    document.getElementById("religion")?.value?.trim() || "";
-  const father_email =
-  document.getElementById("fatherEmail")?.value?.trim() || "";
-
-  // UPDATED: use correct element IDs from the form
-  const father_occupation =
-    document.getElementById("fOcc")?.value?.trim() || "";
-  const nationality =
-    document.getElementById("nation")?.value?.trim() || "";
-
-  const present_address =
-    document.getElementById("addr")?.value?.trim() ||
-    document.getElementById("address")?.value?.trim() ||
-    "";
-  const secondary_contact =
-    cleanPhoneNumber(document.getElementById("sContact")?.value || "");
-
-  // NOTE: city/state variables assume IDs exist in HTML
-  const city =
-    document.getElementById("city")?.value?.trim() || "";
-  const state =
-    document.getElementById("state")?.value?.trim() || "";
-
-  const children = [];
-
-  // main student
-  const mainName =
-    document.getElementById("studentName")?.value?.trim() || "";
-  const mainDob = document.getElementById("dob")?.value?.trim() || "";
-  const mainGrade =
-    document.getElementById("gradeSelect")?.value?.trim() || "";
-  const mainGender =
-    Array.from(document.querySelectorAll('input[name="gender"]')).find(
-      (r) => r.checked
-    )?.value || "";
-
-  if (mainName || mainDob || mainGrade || mainGender) {
-    children.push({
-      student_name: mainName,
-      gender: mainGender,
-      dob: mainDob,
-      grade: mainGrade,
-    });
-  }
-
-  // extra children
-  const childBlocks = document.querySelectorAll(".child-block");
-  childBlocks.forEach((block) => {
-    const name = block.querySelector(".studentName")?.value?.trim() || "";
-    const dob = block.querySelector(".dob")?.value?.trim() || "";
-    const grade = block.querySelector("select")?.value?.trim() || "";
-    const gender =
-      block.querySelector('input[type="radio"]:checked')?.value || "";
-
-    if (name || dob || grade || gender) {
-      children.push({
-        student_name: name,
-        gender,
-        dob,
-        grade,
-      });
-    }
-  });
-
-  return {
-    session,
-    registration_date,
-    processed_by,
-    father_name,
-    guardian_whatsapp,
-    religion,
-    father_email,
-    father_occupation,
-    nationality,
-    present_address,
-    city,
-    state,
-    secondary_contact,
-    children,
-  };
-}
-
-async function sendAdmissionToDashboard() {
-  const payload = buildAdmissionPayloadForDashboard();
-
-  if (!payload.children || !payload.children.length) {
-    console.warn("No children data found, skipping DB save.");
-    return false;
+    infoBar.style.display =
+      "none";
   }
 
   try {
-    const res = await fetch(DASHBOARD_ADMISSIONS_API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // ✅ API key header
-        "x-api-key": DASHBOARD_API_KEY,
-      },
-      body: JSON.stringify(payload),
-    });
+    /*
+      Wait for logos/images before
+      capturing the pages.
+    */
+    await Promise.all(
+      Array.from(
+        document.images
+      ).map((image) => {
+        if (image.complete) {
+          return Promise.resolve();
+        }
 
-    const data = await res.json().catch(() => ({}));
+        return new Promise(
+          (resolve) => {
+            image.onload =
+              resolve;
 
-    if (!res.ok || !data.success) {
-      console.error("Dashboard save failed:", res.status, data);
-      alert(
-        "Form PDF will be saved, but data could not be saved to the dashboard. Please inform the IT department."
+            image.onerror =
+              resolve;
+          }
+        );
+      })
+    );
+
+    const pdf =
+      new jsPDF(
+        "p",
+        "pt",
+        "a4"
       );
-      return false;
+
+    for (
+      let index = 0;
+      index < pages.length;
+      index++
+    ) {
+      const page =
+        pages[index];
+
+      const canvas =
+        await html2canvas(
+          page,
+          {
+            scale: 2.2,
+
+            useCORS: true,
+
+            allowTaint: false,
+
+            backgroundColor:
+              "#ffffff",
+
+            logging: false,
+
+            windowWidth: 980,
+
+            scrollX: 0,
+
+            scrollY: 0,
+          }
+        );
+
+      const image =
+        canvas.toDataURL(
+          "image/jpeg",
+          0.95
+        );
+
+      if (index > 0) {
+        pdf.addPage();
+      }
+
+      pdf.addImage(
+        image,
+        "JPEG",
+        0,
+        0,
+        595,
+        842
+      );
     }
 
-    console.log("Admission saved to dashboard:", data);
-    return true;
-  } catch (err) {
-    console.error("Error calling dashboard /api/admissions:", err);
-    alert(
-      "Form PDF will be saved, but connection to dashboard failed (network error)."
+    const date =
+      new Date()
+        .toISOString()
+        .slice(0, 10);
+
+    const studentName =
+      document
+        .getElementById(
+          "studentName"
+        )
+        ?.value
+        ?.trim()
+        ?.replace(
+          /[^a-z0-9]+/gi,
+          "-"
+        )
+        ?.replace(
+          /^-+|-+$/g,
+          ""
+        ) || "Student";
+
+    const filename =
+      `AFCA-Admission-${studentName}-${date}.pdf`;
+
+    return {
+      pdf,
+      filename,
+    };
+  } finally {
+    /*
+      Always restore browser UI,
+      even if PDF generation fails.
+    */
+    if (infoBar) {
+      infoBar.style.display =
+        previousInfoBarDisplay;
+    }
+
+    document.body.classList.remove(
+      "pdf-export"
     );
-    return false;
   }
 }
 
-/* ---------- 4) Send Data + Export PDF + WhatsApp ---------- */
+/* =========================================================
+   SAVE PDF
+
+   IMPORTANT:
+   There is NO database/API request here.
+========================================================= */
+
 async function exportPdfAndOpenWhatsAppApp() {
-  // Stop repeated clicks immediately
   if (isSubmittingAdmission) {
     return;
   }
 
-  // Master "I agree" must be checked
-  const master = document.getElementById("declMaster");
-  if (master && !master.checked) {
-    alert('Please tick the "I agree" checkbox to proceed.');
+  const master =
+    document.getElementById(
+      "declMaster"
+    );
+
+  if (
+    master &&
+    !master.checked
+  ) {
+    alert(
+      'Please tick the "I agree" checkbox to proceed.'
+    );
+
+    try {
+      master.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    } catch {}
+
     return;
   }
 
   isSubmittingAdmission = true;
+
   setPdfButtonBusyState(true);
 
   try {
-    // Optionally mark all declaration checkboxes as checked
+    /*
+      Mark individual declaration
+      checkboxes if master agreement
+      has been accepted.
+    */
     document
-      .querySelectorAll(".declaration-list input.decl")
-      .forEach((cb) => (cb.checked = true));
+      .querySelectorAll(
+        ".declaration-list input.decl"
+      )
+      .forEach(
+        (checkbox) => {
+          checkbox.checked = true;
+        }
+      );
 
-    // First try to save to DB
-    await sendAdmissionToDashboard();
+    /*
+      FRONTEND ONLY.
 
-    // Then continue with WhatsApp + PDF flow
-    await exportPdfAndOpenWhatsAppApp_Inner();
-  } catch (err) {
-    console.error("Error during admission submit flow:", err);
-    alert("Something went wrong while saving the form. Please try again.");
+      No fetch()
+      No POST request
+      No dashboard API
+      No MongoDB
+      No PostgreSQL
+      No database storage
+
+      Only generate/share/download PDF.
+    */
+    await exportPdfAndOpenWhatsAppAppInner();
+  } catch (error) {
+    console.error(
+      "PDF generation error:",
+      error
+    );
+
+    alert(
+      "Something went wrong while creating the PDF. Please try again."
+    );
   } finally {
-    isSubmittingAdmission = false;
-    setPdfButtonBusyState(false);
+    isSubmittingAdmission =
+      false;
+
+    setPdfButtonBusyState(
+      false
+    );
   }
 }
 
-/* ---------- 4) Share to WhatsApp APP with attached PDF (native share) ---------- */
-async function exportPdfAndOpenWhatsAppApp_Inner() {
-  const built = await buildPdfFromPages();
-  if (!built) return;
-  const { pdf, filename } = built;
+/* =========================================================
+   PDF DOWNLOAD / NATIVE SHARE
+========================================================= */
 
-  // Build a File for Web Share API (required for attaching to WhatsApp)
-  const blob = pdf.output("blob");
-  const file = new File([blob], filename, { type: "application/pdf" });
+async function exportPdfAndOpenWhatsAppAppInner() {
+  const result =
+    await buildPdfFromPages();
+
+  if (!result) return;
+
+  const {
+    pdf,
+    filename,
+  } = result;
+
+  const blob =
+    pdf.output("blob");
+
+  const file =
+    new File(
+      [blob],
+      filename,
+      {
+        type: "application/pdf",
+      }
+    );
 
   const student =
-    document.getElementById("studentName")?.value?.trim() || "student";
-  const caption =
-    `IVS Admission Form for ${student}\n` +
-    `Session: ${getCurrentAcademicSession()}\n\n` +
-    `Please review the attached PDF. Thank you.`;
+    document
+      .getElementById(
+        "studentName"
+      )
+      ?.value
+      ?.trim() ||
+    "student";
 
+  const caption =
+    `AFCA Admission Form for ${student}\n` +
+    `Session: ${getCurrentAcademicSession()}\n\n` +
+    `Please review the attached admission form. Thank you.`;
+
+  /*
+    Mobile browsers can attach the PDF
+    directly using native Web Share API.
+  */
   try {
-    // Best path: native share with FILES (Android Chrome, iOS Safari 16.4+ over HTTPS)
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    if (
+      navigator.canShare &&
+      navigator.canShare({
+        files: [file],
+      })
+    ) {
       await navigator.share({
         files: [file],
-        title: "IVS Admission Form",
+
+        title:
+          "AFCA Admission Form",
+
         text: caption,
       });
 
-      // optional: also save a local copy for the user
+      /*
+        Keep a local PDF copy too.
+      */
       try {
         pdf.save(filename);
-      } catch {}
-      return; // user is now in WhatsApp app with the file attached
+      } catch (
+        saveError
+      ) {
+        console.warn(
+          "Local PDF save failed:",
+          saveError
+        );
+      }
+
+      return;
     }
-  } catch (err) {
-    console.warn("Native share failed, will fallback:", err);
+  } catch (shareError) {
+    console.warn(
+      "Native sharing cancelled or failed:",
+      shareError
+    );
   }
 
-  // Fallbacks (no WhatsApp Web):
-  // 1) Save the PDF locally so the user can attach inside WhatsApp app
+  /*
+    Desktop / unsupported browser:
+    simply download the PDF.
+
+    No API call is made.
+  */
   try {
     pdf.save(filename);
-  } catch {}
-
-  // 2) Try to open WhatsApp app with a helpful prefilled text (cannot attach via URL)
-  const helper =
-    `Assalamu Alaikum. I have saved my admission form PDF (${filename}). ` +
-    `I will attach the file here and send.`;
-  const deepLink = `whatsapp://send?text=${encodeURIComponent(helper)}`;
-
-  // Try deep link first (opens app on mobile). If it fails silently, show a tip.
-  window.location.href = deepLink;
-
-  // As a final hint if nothing happens (desktop, unsupported), guide the user.
-  setTimeout(() => {
-    alert(
-      "If WhatsApp didn’t open automatically, please open the WhatsApp app and attach the saved PDF from your downloads."
+  } catch (saveError) {
+    console.error(
+      "PDF download failed:",
+      saveError
     );
-  }, 1200);
+
+    throw saveError;
+  }
 }
 
-/* ---------- 5) Grade: force single selection (radio-like) ---------- */
+/* =========================================================
+   SINGLE GRADE SELECTION
+========================================================= */
+
 function initSingleGradeSelect() {
-  const grid = document.querySelector(".grades"); // container of grade boxes
+  const grid =
+    document.querySelector(
+      ".grades"
+    );
+
   if (!grid) return;
 
-  const inputs = Array.from(grid.querySelectorAll('input[type="checkbox"]'));
+  const inputs =
+    Array.from(
+      grid.querySelectorAll(
+        'input[type="checkbox"]'
+      )
+    );
 
-  // A) Page load: if multiple are checked (e.g., after refresh/auto-fill), keep only the first
-  const initiallyChecked = inputs.filter((i) => i.checked);
-  if (initiallyChecked.length > 1) {
-    initiallyChecked.slice(1).forEach((i) => (i.checked = false));
+  const initiallyChecked =
+    inputs.filter(
+      (input) =>
+        input.checked
+    );
+
+  if (
+    initiallyChecked.length >
+    1
+  ) {
+    initiallyChecked
+      .slice(1)
+      .forEach(
+        (input) => {
+          input.checked = false;
+        }
+      );
   }
 
-  // B) Make them behave like radios:
-  //    - pointerdown fires before the browser toggles the checkbox,
-  //      so if the user is about to check a new one, clear others first.
-  inputs.forEach((inp) => {
-    inp.addEventListener("pointerdown", () => {
-      if (!inp.checked) {
-        // it's about to become checked
-        inputs.forEach((o) => {
-          if (o !== inp) o.checked = false;
-        });
-      }
-    });
+  inputs.forEach(
+    (input) => {
+      input.addEventListener(
+        "pointerdown",
+        () => {
+          if (!input.checked) {
+            inputs.forEach(
+              (otherInput) => {
+                if (
+                  otherInput !==
+                  input
+                ) {
+                  otherInput.checked =
+                    false;
+                }
+              }
+            );
+          }
+        }
+      );
 
-    // Safety net: after the change, ensure only one remains checked
-    inp.addEventListener("change", (e) => {
-      if (e.target.checked) {
-        inputs.forEach((o) => {
-          if (o !== e.target) o.checked = false;
-        });
-      }
-    });
-  });
+      input.addEventListener(
+        "change",
+        (event) => {
+          if (
+            event.target.checked
+          ) {
+            inputs.forEach(
+              (otherInput) => {
+                if (
+                  otherInput !==
+                  event.target
+                ) {
+                  otherInput.checked =
+                    false;
+                }
+              }
+            );
+          }
+        }
+      );
+    }
+  );
 }
+
+/* =========================================================
+   DECLARATION MASTER CHECKBOX
+========================================================= */
 
 function initDeclarationMaster() {
-  const master = document.getElementById("declMaster"); // "I agree" checkbox
-  const btn = document.getElementById("btnPdf"); // PDF button
+  const master =
+    document.getElementById(
+      "declMaster"
+    );
 
-  if (!master || !btn) return;
+  const button =
+    document.getElementById(
+      "btnPdf"
+    );
 
-  // Set button state (blur / active)
-  const setBtnState = () => {
-    if (master.checked) {
-      btn.removeAttribute("aria-disabled");
-      btn.style.pointerEvents = "auto"; // clickable
-      btn.style.opacity = "1"; // visually active
-    } else {
-      btn.setAttribute("aria-disabled", "true");
-      btn.style.pointerEvents = "none"; // completely unclickable
-      btn.style.opacity = "0.5"; // visually disabled
-    }
-  };
+  if (
+    !master ||
+    !button
+  ) {
+    return;
+  }
 
-  // Set initial state on page load
-  setBtnState();
+  const updateButtonState =
+    () => {
+      if (
+        master.checked
+      ) {
+        button.removeAttribute(
+          "aria-disabled"
+        );
 
-  // Update when checkbox changes
-  master.addEventListener("change", setBtnState);
+        button.style.pointerEvents =
+          "auto";
 
-  // If not ticked, show alert and block click
-  btn.addEventListener("click", (e) => {
-    if (!master.checked) {
-      e.preventDefault();
-      e.stopImmediatePropagation(); // stop event completely
-      alert('Please tick the “I agree” checkbox to proceed.');
-      try {
-        master.scrollIntoView({ behavior: "smooth", block: "center" });
-      } catch {}
-      return false;
-    }
-  });
+        button.style.opacity =
+          "1";
+      } else {
+        button.setAttribute(
+          "aria-disabled",
+          "true"
+        );
+
+        button.style.pointerEvents =
+          "none";
+
+        button.style.opacity =
+          "0.5";
+      }
+    };
+
+  updateButtonState();
+
+  master.addEventListener(
+    "change",
+    updateButtonState
+  );
 }
 
-/* ---------- ADD ANOTHER CHILD (HTML Template Version - Adjusted Placement) ---------- */
-document.addEventListener("DOMContentLoaded", () => {
-  const addBtn = document.getElementById("addChildBtn");
-  const template = document.getElementById("childTemplate");
-  // new target: .content inside Student Information section
-  const studentContainer =
-    document.querySelector("#studentInfoSection .content") ||
-    document.getElementById("studentInfoSection");
+/* =========================================================
+   ADD ANOTHER CHILD
+========================================================= */
 
-  if (!addBtn || !template || !studentContainer) return;
-
-  let index = 1;
-
-  addBtn.addEventListener("click", () => {
-    index++;
-    const clone = template.cloneNode(true);
-    clone.style.display = "block";
-    clone.id = ""; // remove duplicate ID
-    clone.innerHTML = clone.innerHTML.replace(/__INDEX__/g, index);
-
-    (studentContainer || document.body).appendChild(clone);
-
-    // Attach remove event to this clone
-    const removeBtn = clone.querySelector(".removeChildBtn");
-    if (removeBtn) {
-      removeBtn.addEventListener("click", () => {
-        clone.remove();
-        // Update summary after removing child
-        if (typeof generateSummaryHTML === "function") {
-          generateSummaryHTML();
-        }
-      });
-    }
-
-    // Smooth scroll to new section
-    clone.scrollIntoView({ behavior: "smooth", block: "center" });
-
-    // New inputs will also update summary when user types
-    setTimeout(() => {
-      const newInputs = clone.querySelectorAll("input, select");
-      newInputs.forEach((inp) =>
-        inp.addEventListener("input", () => {
-          if (typeof generateSummaryHTML === "function") generateSummaryHTML();
-        })
+document.addEventListener(
+  "DOMContentLoaded",
+  () => {
+    const addButton =
+      document.getElementById(
+        "addChildBtn"
       );
-      const radios = clone.querySelectorAll('input[type="radio"]');
-      radios.forEach((r) =>
-        r.addEventListener("change", () => {
-          if (typeof generateSummaryHTML === "function") generateSummaryHTML();
-        })
+
+    const template =
+      document.getElementById(
+        "childTemplate"
       );
-    }, 200);
 
-    // Update summary after adding child
-    if (typeof generateSummaryHTML === "function") {
-      generateSummaryHTML();
-    }
-  });
-});
+    const studentContainer =
+      document.querySelector(
+        "#studentInfoSection .content"
+      ) ||
+      document.getElementById(
+        "studentInfoSection"
+      );
 
-/* ---------- LIVE STUDENT SUMMARY CREATION ---------- */
-document.addEventListener("DOMContentLoaded", () => {
-  const summaryDiv = document.getElementById("studentSummary");
-  const addChildBtn = document.getElementById("addChildBtn");
-  const mainFields = {
-    name: document.getElementById("studentName"),
-    dob: document.getElementById("dob"),
-    grade: document.getElementById("gradeSelect"),
-    genderRadios: document.querySelectorAll('input[name="gender"]'),
-  };
-
-  window.generateSummaryHTML = function () {
-    let html = "";
-    let index = 1;
-
-    // Main Student Info
-    const mainGender =
-      Array.from(mainFields.genderRadios).find((r) => r.checked)?.value || "";
     if (
-      mainFields.name.value ||
-      mainFields.dob.value ||
-      mainFields.grade.value
+      !addButton ||
+      !template ||
+      !studentContainer
     ) {
-      html += `
-        <div class="child-summary" data-index="main">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <strong>Child ${index}:</strong>
-            <button type="button" class="remove-summary-btn hide-in-pdf" 
-              style="background:#dc2626;color:#fff;border:none;padding:2px 6px;
-                     border-radius:4px;cursor:pointer;font-size:12px;">
-              ✖
-            </button>
-          </div>
-          Name: ${mainFields.name.value || ""}<br>
-          DOB: ${mainFields.dob.value || ""}<br>
-          Gender: ${mainGender}<br>
-          Grade: ${mainFields.grade.value || ""}
-        </div><hr class="sep">`;
-      index++;
+      return;
     }
 
-    // Added Child Blocks
-    const childBlocks = document.querySelectorAll(".child-block");
-    childBlocks.forEach((block, i) => {
-      const name = block.querySelector(".studentName")?.value || "";
-      const dob = block.querySelector(".dob")?.value || "";
-      const grade = block.querySelector("select")?.value || "";
-      const gender =
-        block.querySelector('input[type="radio"]:checked')?.value || "";
+    let childIndex = 1;
 
-      if (name || dob || grade) {
-        html += `
-          <div class="child-summary" data-index="${i}">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <strong>Child ${index}:</strong>
-              <button type="button" class="remove-summary-btn hide-in-pdf" 
-                style="background:#dc2626;color:#fff;border:none;padding:2px 6px;
-                       border-radius:4px;cursor:pointer;font-size:12px;">
-                ✖
-              </button>
-            </div>
-            Name: ${name}<br>
-            DOB: ${dob}<br>
-            Gender: ${gender}<br>
-            Grade: ${grade}
-          </div><hr class="sep">`;
-        index++;
-      }
-    });
+    addButton.addEventListener(
+      "click",
+      () => {
+        childIndex++;
 
-    summaryDiv.innerHTML = html || "<em>No student data yet.</em>";
+        const clone =
+          template.cloneNode(
+            true
+          );
 
-    // Attach click to each remove button
-    summaryDiv.querySelectorAll(".remove-summary-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const blockIndex = e.target.closest(".child-summary").dataset.index;
+        clone.style.display =
+          "block";
 
-        if (blockIndex === "main") {
-          // Clear main student data
-          mainFields.name.value = "";
-          mainFields.dob.value = "";
-          mainFields.grade.value = "";
-          mainFields.genderRadios.forEach((r) => (r.checked = false));
-        } else {
-          // Remove specific child block
-          const childBlocks = document.querySelectorAll(".child-block");
-          if (childBlocks[blockIndex]) childBlocks[blockIndex].remove();
+        clone.id = "";
+
+        clone.innerHTML =
+          clone.innerHTML.replace(
+            /__INDEX__/g,
+            childIndex
+          );
+
+        studentContainer.appendChild(
+          clone
+        );
+
+        const removeButton =
+          clone.querySelector(
+            ".removeChildBtn"
+          );
+
+        if (
+          removeButton
+        ) {
+          removeButton.addEventListener(
+            "click",
+            () => {
+              clone.remove();
+
+              if (
+                typeof window.generateSummaryHTML ===
+                "function"
+              ) {
+                window.generateSummaryHTML();
+              }
+            }
+          );
         }
 
-        generateSummaryHTML(); // Refresh summary
-      });
-    });
-  };
+        /*
+          Add live-summary listeners
+          to fields inside new child.
+        */
+        const fields =
+          clone.querySelectorAll(
+            "input, select"
+          );
 
-  // Watch for main student input changes
-  [mainFields.name, mainFields.dob, mainFields.grade].forEach((el) =>
-    el.addEventListener("input", generateSummaryHTML)
-  );
-  mainFields.genderRadios.forEach((r) =>
-    r.addEventListener("change", generateSummaryHTML)
-  );
+        fields.forEach(
+          (field) => {
+            field.addEventListener(
+              "input",
+              () => {
+                if (
+                  typeof window.generateSummaryHTML ===
+                  "function"
+                ) {
+                  window.generateSummaryHTML();
+                }
+              }
+            );
 
-  // When Add Another Child button clicked
-  if (addChildBtn) {
-    addChildBtn.addEventListener("click", () => {
-      setTimeout(() => {
-        const newBlock = document.querySelectorAll(
-          ".child-block:last-child input, .child-block:last-child select"
+            field.addEventListener(
+              "change",
+              () => {
+                if (
+                  typeof window.generateSummaryHTML ===
+                  "function"
+                ) {
+                  window.generateSummaryHTML();
+                }
+              }
+            );
+          }
         );
-        newBlock.forEach((inp) =>
-          inp.addEventListener("input", generateSummaryHTML)
-        );
-        const radios = document.querySelectorAll(
-          ".child-block:last-child input[type='radio']"
-        );
-        radios.forEach((r) =>
-          r.addEventListener("change", generateSummaryHTML)
-        );
-      }, 300);
-    });
+
+        if (
+          typeof window.generateSummaryHTML ===
+          "function"
+        ) {
+          window.generateSummaryHTML();
+        }
+
+        try {
+          clone.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        } catch {}
+      }
+    );
   }
+);
 
-  generateSummaryHTML();
-});
+/* =========================================================
+   LIVE STUDENT SUMMARY
+========================================================= */
 
-// --- Detect staff name from URL and show it at the end of Page 2 ---
-document.addEventListener("DOMContentLoaded", () => {
-  const nameBox = document.getElementById("processedByName");
-  if (!nameBox) return;
+document.addEventListener(
+  "DOMContentLoaded",
+  () => {
+    const summaryDiv =
+      document.getElementById(
+        "studentSummary"
+      );
 
-  // Read sentBy from URL
-  const qs = new URLSearchParams(window.location.search);
-  let sender = (qs.get("sentBy") || "").trim();
+    if (!summaryDiv) {
+      return;
+    }
 
-  // Optional short-code map
-  const MAP = {
-    ms: "Mustafa",
-    sz: "Shahzor",
-    mt: "Motasim",
-    am: "Aamir",
-  };
-  if (!sender && qs.get("s")) sender = MAP[qs.get("s")] || "";
+    const mainName =
+      document.getElementById(
+        "studentName"
+      );
 
-  // Capitalize first letter
-  if (sender) {
-    const formatted = sender.charAt(0).toUpperCase() + sender.slice(1);
-    nameBox.textContent = formatted;
-  } else {
-    nameBox.textContent = "—"; // blank for simple link
+    const mainDob =
+      document.getElementById(
+        "dob"
+      );
+
+    const mainGrade =
+      document.getElementById(
+        "gradeSelect"
+      );
+
+    const mainGenderRadios =
+      document.querySelectorAll(
+        'input[name="gender"]'
+      );
+
+    /*
+      Escape user-entered values before
+      injecting them into summary HTML.
+    */
+    const escapeHTML =
+      (value) => {
+        return String(
+          value || ""
+        )
+          .replace(
+            /&/g,
+            "&amp;"
+          )
+          .replace(
+            /</g,
+            "&lt;"
+          )
+          .replace(
+            />/g,
+            "&gt;"
+          )
+          .replace(
+            /"/g,
+            "&quot;"
+          )
+          .replace(
+            /'/g,
+            "&#039;"
+          );
+      };
+
+    window.generateSummaryHTML =
+      function () {
+        let html = "";
+
+        let displayIndex = 1;
+
+        const mainGender =
+          Array.from(
+            mainGenderRadios
+          ).find(
+            (radio) =>
+              radio.checked
+          )?.value || "";
+
+        const nameValue =
+          mainName?.value || "";
+
+        const dobValue =
+          mainDob?.value || "";
+
+        const gradeValue =
+          mainGrade?.value || "";
+
+        /*
+          Main student
+        */
+        if (
+          nameValue ||
+          dobValue ||
+          gradeValue ||
+          mainGender
+        ) {
+          html += `
+            <div
+              class="child-summary"
+              data-index="main"
+            >
+
+              <div
+                style="
+                  display:flex;
+                  justify-content:space-between;
+                  align-items:center;
+                "
+              >
+
+                <strong>
+                  Child ${displayIndex}:
+                </strong>
+
+                <button
+                  type="button"
+                  class="
+                    remove-summary-btn
+                    hide-in-pdf
+                  "
+                  style="
+                    background:#dc2626;
+                    color:#fff;
+                    border:none;
+                    padding:2px 6px;
+                    border-radius:4px;
+                    cursor:pointer;
+                    font-size:12px;
+                  "
+                >
+                  ✖
+                </button>
+
+              </div>
+
+              Name:
+              ${escapeHTML(nameValue)}
+              <br>
+
+              DOB:
+              ${escapeHTML(dobValue)}
+              <br>
+
+              Gender:
+              ${escapeHTML(mainGender)}
+              <br>
+
+              Grade:
+              ${escapeHTML(gradeValue)}
+
+            </div>
+
+            <hr class="sep">
+          `;
+
+          displayIndex++;
+        }
+
+        /*
+          Additional children
+        */
+        const childBlocks =
+          document.querySelectorAll(
+            ".child-block"
+          );
+
+        childBlocks.forEach(
+          (
+            block,
+            blockIndex
+          ) => {
+            const childName =
+              block.querySelector(
+                ".studentName"
+              )?.value || "";
+
+            const childDob =
+              block.querySelector(
+                ".dob"
+              )?.value || "";
+
+            const childGrade =
+              block.querySelector(
+                "select"
+              )?.value || "";
+
+            const childGender =
+              block.querySelector(
+                'input[type="radio"]:checked'
+              )?.value || "";
+
+            if (
+              childName ||
+              childDob ||
+              childGrade ||
+              childGender
+            ) {
+              html += `
+                <div
+                  class="child-summary"
+                  data-index="${blockIndex}"
+                >
+
+                  <div
+                    style="
+                      display:flex;
+                      justify-content:space-between;
+                      align-items:center;
+                    "
+                  >
+
+                    <strong>
+                      Child ${displayIndex}:
+                    </strong>
+
+                    <button
+                      type="button"
+                      class="
+                        remove-summary-btn
+                        hide-in-pdf
+                      "
+                      style="
+                        background:#dc2626;
+                        color:#fff;
+                        border:none;
+                        padding:2px 6px;
+                        border-radius:4px;
+                        cursor:pointer;
+                        font-size:12px;
+                      "
+                    >
+                      ✖
+                    </button>
+
+                  </div>
+
+                  Name:
+                  ${escapeHTML(childName)}
+                  <br>
+
+                  DOB:
+                  ${escapeHTML(childDob)}
+                  <br>
+
+                  Gender:
+                  ${escapeHTML(childGender)}
+                  <br>
+
+                  Grade:
+                  ${escapeHTML(childGrade)}
+
+                </div>
+
+                <hr class="sep">
+              `;
+
+              displayIndex++;
+            }
+          }
+        );
+
+        summaryDiv.innerHTML =
+          html ||
+          "<em>No student data yet.</em>";
+
+        /*
+          Remove child from summary
+        */
+        summaryDiv
+          .querySelectorAll(
+            ".remove-summary-btn"
+          )
+          .forEach(
+            (button) => {
+              button.addEventListener(
+                "click",
+                (event) => {
+                  const summary =
+                    event.target.closest(
+                      ".child-summary"
+                    );
+
+                  if (!summary) {
+                    return;
+                  }
+
+                  const blockIndex =
+                    summary.dataset.index;
+
+                  if (
+                    blockIndex ===
+                    "main"
+                  ) {
+                    if (
+                      mainName
+                    ) {
+                      mainName.value =
+                        "";
+                    }
+
+                    if (
+                      mainDob
+                    ) {
+                      mainDob.value =
+                        "";
+                    }
+
+                    if (
+                      mainGrade
+                    ) {
+                      mainGrade.value =
+                        "";
+                    }
+
+                    mainGenderRadios.forEach(
+                      (radio) => {
+                        radio.checked =
+                          false;
+                      }
+                    );
+                  } else {
+                    const blocks =
+                      document.querySelectorAll(
+                        ".child-block"
+                      );
+
+                    if (
+                      blocks[
+                        Number(
+                          blockIndex
+                        )
+                      ]
+                    ) {
+                      blocks[
+                        Number(
+                          blockIndex
+                        )
+                      ].remove();
+                    }
+                  }
+
+                  window.generateSummaryHTML();
+                }
+              );
+            }
+          );
+      };
+
+    /*
+      Watch main student fields.
+    */
+    [
+      mainName,
+      mainDob,
+      mainGrade,
+    ]
+      .filter(Boolean)
+      .forEach(
+        (field) => {
+          field.addEventListener(
+            "input",
+            window.generateSummaryHTML
+          );
+
+          field.addEventListener(
+            "change",
+            window.generateSummaryHTML
+          );
+        }
+      );
+
+    mainGenderRadios.forEach(
+      (radio) => {
+        radio.addEventListener(
+          "change",
+          window.generateSummaryHTML
+        );
+      }
+    );
+
+    window.generateSummaryHTML();
   }
-});
+);
 
-/* ---------- Guardian WhatsApp Country Dropdown (Search + Auto Code + Lock Code) ---------- */
+/* =========================================================
+   PROCESSED BY / SENT BY
+========================================================= */
+
+document.addEventListener(
+  "DOMContentLoaded",
+  () => {
+    const nameBox =
+      document.getElementById(
+        "processedByName"
+      );
+
+    if (!nameBox) {
+      return;
+    }
+
+    const query =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    let sender =
+      (
+        query.get(
+          "sentBy"
+        ) || ""
+      ).trim();
+
+    const STAFF_MAP = {
+      ms: "Mustafa",
+      sz: "Shahzor",
+      mt: "Motasim",
+      am: "Aamir",
+    };
+
+    if (
+      !sender &&
+      query.get("s")
+    ) {
+      sender =
+        STAFF_MAP[
+          query.get("s")
+        ] || "";
+    }
+
+    if (sender) {
+      sender =
+        sender
+          .charAt(0)
+          .toUpperCase() +
+        sender.slice(1);
+
+      nameBox.textContent =
+        sender;
+    } else {
+      nameBox.textContent =
+        "—";
+    }
+  }
+);
+
+/* =========================================================
+   GUARDIAN WHATSAPP COUNTRY SELECTOR
+========================================================= */
+
 function initGuardianWhatsAppDropdown() {
-  const input = document.getElementById("gWhats");
+  const input =
+    document.getElementById(
+      "gWhats"
+    );
+
   if (!input) return;
 
-  // Basic tel settings
-  input.setAttribute("inputmode", "tel");
-  input.setAttribute("autocomplete", "tel");
+  input.setAttribute(
+    "inputmode",
+    "tel"
+  );
 
-  // Until a country is selected, user cannot type the number
+  input.setAttribute(
+    "autocomplete",
+    "tel"
+  );
+
+  /*
+    Until a country is selected the
+    phone number field remains locked.
+  */
   input.readOnly = true;
-  let countrySelected = false;
 
-  // Wrap input in a relative container
-  const wrapper = document.createElement("div");
-  wrapper.style.position = "relative";
-  wrapper.style.width = "100%";
+  let countrySelected =
+    false;
 
-  const parent = input.parentNode;
-  parent.insertBefore(wrapper, input);
-  wrapper.appendChild(input);
+  const wrapper =
+    document.createElement(
+      "div"
+    );
 
-  // Dropdown container
-  const dropdown = document.createElement("div");
-  dropdown.style.position = "absolute";
-  dropdown.style.top = "100%";
-  dropdown.style.left = "0";
-  dropdown.style.right = "0";
-  dropdown.style.zIndex = "50";
-  dropdown.style.background = "#ffffff";
-  dropdown.style.border = "1px solid #cbd5e1";
-  dropdown.style.borderRadius = "6px";
-  dropdown.style.marginTop = "4px";
-  dropdown.style.boxShadow = "0 4px 12px rgba(15,23,42,0.12)";
-  dropdown.style.display = "none";
-  wrapper.appendChild(dropdown);
+  wrapper.style.position =
+    "relative";
 
-  // Search box
-  const search = document.createElement("input");
-  search.type = "text";
-  search.placeholder = "Search country...";
-  search.style.width = "100%";
-  search.style.boxSizing = "border-box";
-  search.style.padding = "6px 10px";
-  search.style.border = "none";
-  search.style.borderBottom = "1px solid #e2e8f0";
-  search.style.outline = "none";
-  dropdown.appendChild(search);
+  wrapper.style.width =
+    "100%";
 
-  // List
-  const list = document.createElement("div");
-  list.style.maxHeight = "190px";
-  list.style.overflowY = "auto";
-  dropdown.appendChild(list);
+  const parent =
+    input.parentNode;
 
-  // Country list
+  parent.insertBefore(
+    wrapper,
+    input
+  );
+
+  wrapper.appendChild(
+    input
+  );
+
+  const dropdown =
+    document.createElement(
+      "div"
+    );
+
+  dropdown.style.position =
+    "absolute";
+
+  dropdown.style.top =
+    "100%";
+
+  dropdown.style.left =
+    "0";
+
+  dropdown.style.right =
+    "0";
+
+  dropdown.style.zIndex =
+    "9999";
+
+  dropdown.style.background =
+    "#ffffff";
+
+  dropdown.style.border =
+    "1px solid #cbd5e1";
+
+  dropdown.style.borderRadius =
+    "6px";
+
+  dropdown.style.marginTop =
+    "4px";
+
+  dropdown.style.boxShadow =
+    "0 4px 12px rgba(15,23,42,0.12)";
+
+  dropdown.style.display =
+    "none";
+
+  wrapper.appendChild(
+    dropdown
+  );
+
+  const search =
+    document.createElement(
+      "input"
+    );
+
+  search.type =
+    "text";
+
+  search.placeholder =
+    "Search country...";
+
+  search.style.width =
+    "100%";
+
+  search.style.boxSizing =
+    "border-box";
+
+  search.style.padding =
+    "7px 10px";
+
+  search.style.border =
+    "none";
+
+  search.style.borderBottom =
+    "1px solid #e2e8f0";
+
+  search.style.outline =
+    "none";
+
+  dropdown.appendChild(
+    search
+  );
+
+  const list =
+    document.createElement(
+      "div"
+    );
+
+  list.style.maxHeight =
+    "200px";
+
+  list.style.overflowY =
+    "auto";
+
+  dropdown.appendChild(
+    list
+  );
+
+  /*
+    Supported country calling codes.
+  */
   const COUNTRIES = [
-    { name: "Afghanistan", code: "AF", dial: "+93" },
-    { name: "Albania", code: "AL", dial: "+355" },
-    { name: "Algeria", code: "DZ", dial: "+213" },
-    { name: "Andorra", code: "AD", dial: "+376" },
-    { name: "Angola", code: "AO", dial: "+244" },
-    { name: "Antigua and Barbuda", code: "AG", dial: "+1268" },
-    { name: "Argentina", code: "AR", dial: "+54" },
-    { name: "Armenia", code: "AM", dial: "+374" },
-    { name: "Australia", code: "AU", dial: "+61" },
-    { name: "Austria", code: "AT", dial: "+43" },
-    { name: "Azerbaijan", code: "AZ", dial: "+994" },
+    ["Afghanistan", "+93"],
+    ["Albania", "+355"],
+    ["Algeria", "+213"],
+    ["Andorra", "+376"],
+    ["Angola", "+244"],
+    ["Antigua and Barbuda", "+1268"],
+    ["Argentina", "+54"],
+    ["Armenia", "+374"],
+    ["Australia", "+61"],
+    ["Austria", "+43"],
+    ["Azerbaijan", "+994"],
 
-    { name: "Bahamas", code: "BS", dial: "+1242" },
-    { name: "Bahrain", code: "BH", dial: "+973" },
-    { name: "Bangladesh", code: "BD", dial: "+880" },
-    { name: "Barbados", code: "BB", dial: "+1246" },
-    { name: "Belarus", code: "BY", dial: "+375" },
-    { name: "Belgium", code: "BE", dial: "+32" },
-    { name: "Belize", code: "BZ", dial: "+501" },
-    { name: "Benin", code: "BJ", dial: "+229" },
-    { name: "Bhutan", code: "BT", dial: "+975" },
-    { name: "Bolivia", code: "BO", dial: "+591" },
-    { name: "Bosnia and Herzegovina", code: "BA", dial: "+387" },
-    { name: "Botswana", code: "BW", dial: "+267" },
-    { name: "Brazil", code: "BR", dial: "+55" },
-    { name: "Brunei Darussalam", code: "BN", dial: "+673" },
-    { name: "Bulgaria", code: "BG", dial: "+359" },
-    { name: "Burkina Faso", code: "BF", dial: "+226" },
-    { name: "Burundi", code: "BI", dial: "+257" },
+    ["Bahamas", "+1242"],
+    ["Bahrain", "+973"],
+    ["Bangladesh", "+880"],
+    ["Barbados", "+1246"],
+    ["Belarus", "+375"],
+    ["Belgium", "+32"],
+    ["Belize", "+501"],
+    ["Benin", "+229"],
+    ["Bhutan", "+975"],
+    ["Bolivia", "+591"],
+    ["Bosnia and Herzegovina", "+387"],
+    ["Botswana", "+267"],
+    ["Brazil", "+55"],
+    ["Brunei Darussalam", "+673"],
+    ["Bulgaria", "+359"],
+    ["Burkina Faso", "+226"],
+    ["Burundi", "+257"],
 
-    { name: "Cabo Verde", code: "CV", dial: "+238" },
-    { name: "Cambodia", code: "KH", dial: "+855" },
-    { name: "Cameroon", code: "CM", dial: "+237" },
-    { name: "Canada", code: "CA", dial: "+1" },
-    { name: "Central African Republic", code: "CF", dial: "+236" },
-    { name: "Chad", code: "TD", dial: "+235" },
-    { name: "Chile", code: "CL", dial: "+56" },
-    { name: "China", code: "CN", dial: "+86" },
-    { name: "Colombia", code: "CO", dial: "+57" },
-    { name: "Comoros", code: "KM", dial: "+269" },
-    { name: "Congo", code: "CG", dial: "+242" },
-    { name: "Congo, Democratic Republic", code: "CD", dial: "+243" },
-    { name: "Costa Rica", code: "CR", dial: "+506" },
-    { name: "Côte d’Ivoire", code: "CI", dial: "+225" },
-    { name: "Croatia", code: "HR", dial: "+385" },
-    { name: "Cuba", code: "CU", dial: "+53" },
-    { name: "Cyprus", code: "CY", dial: "+357" },
-    { name: "Czech Republic", code: "CZ", dial: "+420" },
+    ["Cabo Verde", "+238"],
+    ["Cambodia", "+855"],
+    ["Cameroon", "+237"],
+    ["Canada", "+1"],
+    ["Central African Republic", "+236"],
+    ["Chad", "+235"],
+    ["Chile", "+56"],
+    ["China", "+86"],
+    ["Colombia", "+57"],
+    ["Comoros", "+269"],
+    ["Congo", "+242"],
+    ["Congo, Democratic Republic", "+243"],
+    ["Costa Rica", "+506"],
+    ["Côte d’Ivoire", "+225"],
+    ["Croatia", "+385"],
+    ["Cuba", "+53"],
+    ["Cyprus", "+357"],
+    ["Czech Republic", "+420"],
 
-    { name: "Denmark", code: "DK", dial: "+45" },
-    { name: "Djibouti", code: "DJ", dial: "+253" },
-    { name: "Dominica", code: "DM", dial: "+1767" },
-    { name: "Dominican Republic", code: "DO", dial: "+1809" },
+    ["Denmark", "+45"],
+    ["Djibouti", "+253"],
+    ["Dominica", "+1767"],
+    ["Dominican Republic", "+1809"],
 
-    { name: "Ecuador", code: "EC", dial: "+593" },
-    { name: "Egypt", code: "EG", dial: "+20" },
-    { name: "El Salvador", code: "SV", dial: "+503" },
-    { name: "Equatorial Guinea", code: "GQ", dial: "+240" },
-    { name: "Eritrea", code: "ER", dial: "+291" },
-    { name: "Estonia", code: "EE", dial: "+372" },
-    { name: "Eswatini", code: "SZ", dial: "+268" },
-    { name: "Ethiopia", code: "ET", dial: "+251" },
+    ["Ecuador", "+593"],
+    ["Egypt", "+20"],
+    ["El Salvador", "+503"],
+    ["Equatorial Guinea", "+240"],
+    ["Eritrea", "+291"],
+    ["Estonia", "+372"],
+    ["Eswatini", "+268"],
+    ["Ethiopia", "+251"],
 
-    { name: "Fiji", code: "FJ", dial: "+679" },
-    { name: "Finland", code: "FI", dial: "+358" },
-    { name: "France", code: "FR", dial: "+33" },
+    ["Fiji", "+679"],
+    ["Finland", "+358"],
+    ["France", "+33"],
 
-    { name: "Gabon", code: "GA", dial: "+241" },
-    { name: "Gambia", code: "GM", dial: "+220" },
-    { name: "Georgia", code: "GE", dial: "+995" },
-    { name: "Germany", code: "DE", dial: "+49" },
-    { name: "Ghana", code: "GH", dial: "+233" },
-    { name: "Greece", code: "GR", dial: "+30" },
-    { name: "Grenada", code: "GD", dial: "+1473" },
-    { name: "Guatemala", code: "GT", dial: "+502" },
-    { name: "Guinea", code: "GN", dial: "+224" },
-    { name: "Guinea-Bissau", code: "GW", dial: "+245" },
-    { name: "Guyana", code: "GY", dial: "+592" },
+    ["Gabon", "+241"],
+    ["Gambia", "+220"],
+    ["Georgia", "+995"],
+    ["Germany", "+49"],
+    ["Ghana", "+233"],
+    ["Greece", "+30"],
+    ["Grenada", "+1473"],
+    ["Guatemala", "+502"],
+    ["Guinea", "+224"],
+    ["Guinea-Bissau", "+245"],
+    ["Guyana", "+592"],
 
-    { name: "Haiti", code: "HT", dial: "+509" },
-    { name: "Honduras", code: "HN", dial: "+504" },
-    { name: "Hungary", code: "HU", dial: "+36" },
+    ["Haiti", "+509"],
+    ["Honduras", "+504"],
+    ["Hungary", "+36"],
 
-    { name: "Iceland", code: "IS", dial: "+354" },
-    { name: "India", code: "IN", dial: "+91" },
-    { name: "Indonesia", code: "ID", dial: "+62" },
-    { name: "Iran", code: "IR", dial: "+98" },
-    { name: "Iraq", code: "IQ", dial: "+964" },
-    { name: "Ireland", code: "IE", dial: "+353" },
-    { name: "Israel", code: "IL", dial: "+972" },
-    { name: "Italy", code: "IT", dial: "+39" },
+    ["Iceland", "+354"],
+    ["India", "+91"],
+    ["Indonesia", "+62"],
+    ["Iran", "+98"],
+    ["Iraq", "+964"],
+    ["Ireland", "+353"],
+    ["Israel", "+972"],
+    ["Italy", "+39"],
 
-    { name: "Jamaica", code: "JM", dial: "+1876" },
-    { name: "Japan", code: "JP", dial: "+81" },
-    { name: "Jordan", code: "JO", dial: "+962" },
+    ["Jamaica", "+1876"],
+    ["Japan", "+81"],
+    ["Jordan", "+962"],
 
-    { name: "Kazakhstan", code: "KZ", dial: "+7" },
-    { name: "Kenya", code: "KE", dial: "+254" },
-    { name: "Kiribati", code: "KI", dial: "+686" },
-    { name: "Kuwait", code: "KW", dial: "+965" },
-    { name: "Kyrgyzstan", code: "KG", dial: "+996" },
+    ["Kazakhstan", "+7"],
+    ["Kenya", "+254"],
+    ["Kiribati", "+686"],
+    ["Kuwait", "+965"],
+    ["Kyrgyzstan", "+996"],
 
-    { name: "Laos", code: "LA", dial: "+856" },
-    { name: "Latvia", code: "LV", dial: "+371" },
-    { name: "Lebanon", code: "LB", dial: "+961" },
-    { name: "Lesotho", code: "LS", dial: "+266" },
-    { name: "Liberia", code: "LR", dial: "+231" },
-    { name: "Libya", code: "LY", dial: "+218" },
-    { name: "Liechtenstein", code: "LI", dial: "+423" },
-    { name: "Lithuania", code: "LT", dial: "+370" },
-    { name: "Luxembourg", code: "LU", dial: "+352" },
+    ["Laos", "+856"],
+    ["Latvia", "+371"],
+    ["Lebanon", "+961"],
+    ["Lesotho", "+266"],
+    ["Liberia", "+231"],
+    ["Libya", "+218"],
+    ["Liechtenstein", "+423"],
+    ["Lithuania", "+370"],
+    ["Luxembourg", "+352"],
 
-    { name: "Madagascar", code: "MG", dial: "+261" },
-    { name: "Malawi", code: "MW", dial: "+265" },
-    { name: "Malaysia", code: "MY", dial: "+60" },
-    { name: "Maldives", code: "MV", dial: "+960" },
-    { name: "Mali", code: "ML", dial: "+223" },
-    { name: "Malta", code: "MT", dial: "+356" },
-    { name: "Marshall Islands", code: "MH", dial: "+692" },
-    { name: "Mauritania", code: "MR", dial: "+222" },
-    { name: "Mauritius", code: "MU", dial: "+230" },
-    { name: "Mexico", code: "MX", dial: "+52" },
-    { name: "Micronesia", code: "FM", dial: "+691" },
-    { name: "Moldova", code: "MD", dial: "+373" },
-    { name: "Monaco", code: "MC", dial: "+377" },
-    { name: "Mongolia", code: "MN", dial: "+976" },
-    { name: "Montenegro", code: "ME", dial: "+382" },
-    { name: "Morocco", code: "MA", dial: "+212" },
-    { name: "Mozambique", code: "MZ", dial: "+258" },
-    { name: "Myanmar", code: "MM", dial: "+95" },
+    ["Madagascar", "+261"],
+    ["Malawi", "+265"],
+    ["Malaysia", "+60"],
+    ["Maldives", "+960"],
+    ["Mali", "+223"],
+    ["Malta", "+356"],
+    ["Marshall Islands", "+692"],
+    ["Mauritania", "+222"],
+    ["Mauritius", "+230"],
+    ["Mexico", "+52"],
+    ["Micronesia", "+691"],
+    ["Moldova", "+373"],
+    ["Monaco", "+377"],
+    ["Mongolia", "+976"],
+    ["Montenegro", "+382"],
+    ["Morocco", "+212"],
+    ["Mozambique", "+258"],
+    ["Myanmar", "+95"],
 
-    { name: "Namibia", code: "NA", dial: "+264" },
-    { name: "Nauru", code: "NR", dial: "+674" },
-    { name: "Nepal", code: "NP", dial: "+977" },
-    { name: "Netherlands", code: "NL", dial: "+31" },
-    { name: "New Zealand", code: "NZ", dial: "+64" },
-    { name: "Nicaragua", code: "NI", dial: "+505" },
-    { name: "Niger", code: "NE", dial: "+227" },
-    { name: "Nigeria", code: "NG", dial: "+234" },
-    { name: "North Korea", code: "KP", dial: "+850" },
-    { name: "North Macedonia", code: "MK", dial: "+389" },
-    { name: "Norway", code: "NO", dial: "+47" },
+    ["Namibia", "+264"],
+    ["Nauru", "+674"],
+    ["Nepal", "+977"],
+    ["Netherlands", "+31"],
+    ["New Zealand", "+64"],
+    ["Nicaragua", "+505"],
+    ["Niger", "+227"],
+    ["Nigeria", "+234"],
+    ["North Korea", "+850"],
+    ["North Macedonia", "+389"],
+    ["Norway", "+47"],
 
-    { name: "Oman", code: "OM", dial: "+968" },
+    ["Oman", "+968"],
 
-    { name: "Pakistan", code: "PK", dial: "+92" },
-    { name: "Palau", code: "PW", dial: "+680" },
-    { name: "Palestine", code: "PS", dial: "+970" },
-    { name: "Panama", code: "PA", dial: "+507" },
-    { name: "Papua New Guinea", code: "PG", dial: "+675" },
-    { name: "Paraguay", code: "PY", dial: "+595" },
-    { name: "Peru", code: "PE", dial: "+51" },
-    { name: "Philippines", code: "PH", dial: "+63" },
-    { name: "Poland", code: "PL", dial: "+48" },
-    { name: "Portugal", code: "PT", dial: "+351" },
+    ["Pakistan", "+92"],
+    ["Palau", "+680"],
+    ["Palestine", "+970"],
+    ["Panama", "+507"],
+    ["Papua New Guinea", "+675"],
+    ["Paraguay", "+595"],
+    ["Peru", "+51"],
+    ["Philippines", "+63"],
+    ["Poland", "+48"],
+    ["Portugal", "+351"],
 
-    { name: "Qatar", code: "QA", dial: "+974" },
+    ["Qatar", "+974"],
 
-    { name: "Romania", code: "RO", dial: "+40" },
-    { name: "Russia", code: "RU", dial: "+7" },
-    { name: "Rwanda", code: "RW", dial: "+250" },
+    ["Romania", "+40"],
+    ["Russia", "+7"],
+    ["Rwanda", "+250"],
 
-    { name: "Saint Kitts and Nevis", code: "KN", dial: "+1869" },
-    { name: "Saint Lucia", code: "LC", dial: "+1758" },
-    { name: "Saint Vincent and the Grenadines", code: "VC", dial: "+1784" },
-    { name: "Samoa", code: "WS", dial: "+685" },
-    { name: "San Marino", code: "SM", dial: "+378" },
-    { name: "Sao Tome and Principe", code: "ST", dial: "+239" },
-    { name: "Saudi Arabia", code: "SA", dial: "+966" },
-    { name: "Senegal", code: "SN", dial: "+221" },
-    { name: "Serbia", code: "RS", dial: "+381" },
-    { name: "Seychelles", code: "SC", dial: "+248" },
-    { name: "Sierra Leone", code: "SL", dial: "+232" },
-    { name: "Singapore", code: "SG", dial: "+65" },
-    { name: "Slovakia", code: "SK", dial: "+421" },
-    { name: "Slovenia", code: "SI", dial: "+386" },
-    { name: "Solomon Islands", code: "SB", dial: "+677" },
-    { name: "Somalia", code: "SO", dial: "+252" },
-    { name: "South Africa", code: "ZA", dial: "+27" },
-    { name: "South Korea", code: "KR", dial: "+82" },
-    { name: "South Sudan", code: "SS", dial: "+211" },
-    { name: "Spain", code: "ES", dial: "+34" },
-    { name: "Sri Lanka", code: "LK", dial: "+94" },
-    { name: "Sudan", code: "SD", dial: "+249" },
-    { name: "Suriname", code: "SR", dial: "+597" },
-    { name: "Sweden", code: "SE", dial: "+46" },
-    { name: "Switzerland", code: "CH", dial: "+41" },
-    { name: "Syria", code: "SY", dial: "+963" },
+    ["Saint Kitts and Nevis", "+1869"],
+    ["Saint Lucia", "+1758"],
+    ["Saint Vincent and the Grenadines", "+1784"],
+    ["Samoa", "+685"],
+    ["San Marino", "+378"],
+    ["Sao Tome and Principe", "+239"],
+    ["Saudi Arabia", "+966"],
+    ["Senegal", "+221"],
+    ["Serbia", "+381"],
+    ["Seychelles", "+248"],
+    ["Sierra Leone", "+232"],
+    ["Singapore", "+65"],
+    ["Slovakia", "+421"],
+    ["Slovenia", "+386"],
+    ["Solomon Islands", "+677"],
+    ["Somalia", "+252"],
+    ["South Africa", "+27"],
+    ["South Korea", "+82"],
+    ["South Sudan", "+211"],
+    ["Spain", "+34"],
+    ["Sri Lanka", "+94"],
+    ["Sudan", "+249"],
+    ["Suriname", "+597"],
+    ["Sweden", "+46"],
+    ["Switzerland", "+41"],
+    ["Syria", "+963"],
 
-    { name: "Taiwan", code: "TW", dial: "+886" },
-    { name: "Tajikistan", code: "TJ", dial: "+992" },
-    { name: "Tanzania", code: "TZ", dial: "+255" },
-    { name: "Thailand", code: "TH", dial: "+66" },
-    { name: "Timor-Leste", code: "TL", dial: "+670" },
-    { name: "Togo", code: "TG", dial: "+228" },
-    { name: "Tonga", code: "TO", dial: "+676" },
-    { name: "Trinidad and Tobago", code: "TT", dial: "+1868" },
-    { name: "Tunisia", code: "TN", dial: "+216" },
-    { name: "Turkey", code: "TR", dial: "+90" },
-    { name: "Turkmenistan", code: "TM", dial: "+993" },
-    { name: "Tuvalu", code: "TV", dial: "+688" },
+    ["Taiwan", "+886"],
+    ["Tajikistan", "+992"],
+    ["Tanzania", "+255"],
+    ["Thailand", "+66"],
+    ["Timor-Leste", "+670"],
+    ["Togo", "+228"],
+    ["Tonga", "+676"],
+    ["Trinidad and Tobago", "+1868"],
+    ["Tunisia", "+216"],
+    ["Turkey", "+90"],
+    ["Turkmenistan", "+993"],
+    ["Tuvalu", "+688"],
 
-    { name: "Uganda", code: "UG", dial: "+256" },
-    { name: "Ukraine", code: "UA", dial: "+380" },
-    { name: "United Arab Emirates", code: "AE", dial: "+971" },
-    { name: "United Kingdom", code: "GB", dial: "+44" },
-    { name: "United States", code: "US", dial: "+1" },
-    { name: "Uruguay", code: "UY", dial: "+598" },
-    { name: "Uzbekistan", code: "UZ", dial: "+998" },
+    ["Uganda", "+256"],
+    ["Ukraine", "+380"],
+    ["United Arab Emirates", "+971"],
+    ["United Kingdom", "+44"],
+    ["United States", "+1"],
+    ["Uruguay", "+598"],
+    ["Uzbekistan", "+998"],
 
-    { name: "Vanuatu", code: "VU", dial: "+678" },
-    { name: "Vatican City", code: "VA", dial: "+39" },
-    { name: "Venezuela", code: "VE", dial: "+58" },
-    { name: "Vietnam", code: "VN", dial: "+84" },
+    ["Vanuatu", "+678"],
+    ["Vatican City", "+39"],
+    ["Venezuela", "+58"],
+    ["Vietnam", "+84"],
 
-    { name: "Yemen", code: "YE", dial: "+967" },
+    ["Yemen", "+967"],
 
-    { name: "Zambia", code: "ZM", dial: "+260" },
-    { name: "Zimbabwe", code: "ZW", dial: "+263" },
-  ];
+    ["Zambia", "+260"],
+    ["Zimbabwe", "+263"],
+  ].map(
+    ([name, dial]) => ({
+      name,
+      dial,
+    })
+  );
 
-  function renderList(filter = "") {
-    const term = filter.trim().toLowerCase();
+  function renderList(
+    filter = ""
+  ) {
+    const term =
+      filter
+        .trim()
+        .toLowerCase();
+
     list.innerHTML = "";
 
-    COUNTRIES.filter((c) => {
-      if (!term) return true;
-      return (
-        c.name.toLowerCase().includes(term) ||
-        c.dial.replace("+", "").startsWith(term.replace("+", ""))
+    const filtered =
+      COUNTRIES.filter(
+        (country) => {
+          if (!term) {
+            return true;
+          }
+
+          return (
+            country.name
+              .toLowerCase()
+              .includes(term) ||
+            country.dial
+              .replace("+", "")
+              .startsWith(
+                term.replace(
+                  "+",
+                  ""
+                )
+              )
+          );
+        }
       );
-    }).forEach((c) => {
-      const item = document.createElement("div");
-      item.textContent = `${c.name} (${c.dial})`;
-      item.style.padding = "6px 10px";
-      item.style.cursor = "pointer";
-      item.style.fontSize = "13px";
 
-      item.addEventListener("mouseenter", () => {
-        item.style.background = "#e5f2ff";
-      });
-      item.addEventListener("mouseleave", () => {
-        item.style.background = "transparent";
-      });
+    filtered.forEach(
+      (country) => {
+        const item =
+          document.createElement(
+            "div"
+          );
 
-      item.addEventListener("click", () => {
-        applyCountry(c, true); // user selection
-        closeDropdown();
-        input.focus();
-        input.setSelectionRange(input.value.length, input.value.length);
-      });
+        item.textContent =
+          `${country.name} (${country.dial})`;
 
-      list.appendChild(item);
-    });
+        item.style.padding =
+          "7px 10px";
 
-    if (!list.innerHTML) {
-      const empty = document.createElement("div");
-      empty.textContent = "No matches";
-      empty.style.padding = "6px 10px";
-      empty.style.fontSize = "12px";
-      empty.style.color = "#64748b";
-      list.appendChild(empty);
+        item.style.cursor =
+          "pointer";
+
+        item.style.fontSize =
+          "13px";
+
+        item.addEventListener(
+          "mouseenter",
+          () => {
+            item.style.background =
+              "#e5f2ff";
+          }
+        );
+
+        item.addEventListener(
+          "mouseleave",
+          () => {
+            item.style.background =
+              "transparent";
+          }
+        );
+
+        item.addEventListener(
+          "click",
+          () => {
+            applyCountry(
+              country,
+              true
+            );
+
+            closeDropdown();
+
+            input.focus();
+
+            input.setSelectionRange(
+              input.value.length,
+              input.value.length
+            );
+          }
+        );
+
+        list.appendChild(
+          item
+        );
+      }
+    );
+
+    if (!filtered.length) {
+      const empty =
+        document.createElement(
+          "div"
+        );
+
+      empty.textContent =
+        "No matches";
+
+      empty.style.padding =
+        "7px 10px";
+
+      empty.style.fontSize =
+        "12px";
+
+      empty.style.color =
+        "#64748b";
+
+      list.appendChild(
+        empty
+      );
     }
   }
 
-  function applyCountry(country, fromUser = false) {
-    const digits = input.value.replace(/\D/g, "");
-    let local = "";
+  function applyCountry(
+    country,
+    fromUser = false
+  ) {
+    let localNumber = "";
 
-    if (input.dataset.currentCode) {
-      const prevCode = input.dataset.currentCode;
-      if (digits.startsWith(prevCode)) {
-        local = digits.slice(prevCode.length);
-      } else {
-        local = digits;
-      }
-    } else {
-      local = digits;
+    /*
+      Preserve the existing local number
+      when switching country.
+    */
+    if (
+      input.dataset.currentDial &&
+      input.value.startsWith(
+        input.dataset.currentDial
+      )
+    ) {
+      localNumber =
+        input.value.slice(
+          input.dataset.currentDial.length
+        );
     }
 
-    const sanitizedLocal = local ? local : "";
-    input.value = country.dial + sanitizedLocal;
-    input.dataset.currentCode = country.dial.replace(/\D/g, "");
-    input.dataset.currentDial = country.dial;
+    localNumber =
+      localNumber.replace(
+        /\D/g,
+        ""
+      );
 
-    // Only when user selects from dropdown, allow typing number
+    input.value =
+      country.dial +
+      localNumber;
+
+    input.dataset.currentDial =
+      country.dial;
+
+    input.dataset.currentCode =
+      country.dial.replace(
+        /\D/g,
+        ""
+      );
+
     if (fromUser) {
-      countrySelected = true;
-      input.readOnly = false;
+      countrySelected =
+        true;
+
+      input.readOnly =
+        false;
     }
   }
 
   function openDropdown() {
-    dropdown.style.display = "block";
-    renderList(search.value);
+    dropdown.style.display =
+      "block";
+
+    search.value = "";
+
+    renderList();
+
+    setTimeout(
+      () => {
+        search.focus();
+      },
+      0
+    );
   }
 
   function closeDropdown() {
-    dropdown.style.display = "none";
+    dropdown.style.display =
+      "none";
   }
 
-  // Events
-  input.addEventListener("focus", openDropdown);
-  input.addEventListener("click", openDropdown);
+  input.addEventListener(
+    "focus",
+    openDropdown
+  );
 
-  search.addEventListener("input", () => renderList(search.value));
+  input.addEventListener(
+    "click",
+    openDropdown
+  );
 
-  document.addEventListener("click", (e) => {
-    if (!wrapper.contains(e.target)) {
-      closeDropdown();
+  search.addEventListener(
+    "input",
+    () => {
+      renderList(
+        search.value
+      );
     }
-  });
+  );
 
-  // Input guard: if code is removed, lock everything
-  input.addEventListener("input", () => {
-    const dial = input.dataset.currentDial || "";
-
-    // If no country is fixed yet
-    if (!dial || !countrySelected) {
-      input.value = "";
-      input.readOnly = true;
-      countrySelected = false;
-      input.dataset.currentCode = "";
-      input.dataset.currentDial = "";
-      return;
+  /*
+    Clicking search should not close
+    the dropdown.
+  */
+  search.addEventListener(
+    "click",
+    (event) => {
+      event.stopPropagation();
     }
+  );
 
-    // If user cleared everything
-    if (!input.value.trim()) {
-      input.value = "";
-      input.readOnly = true;
-      countrySelected = false;
-      input.dataset.currentCode = "";
-      input.dataset.currentDial = "";
-      return;
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (
+        !wrapper.contains(
+          event.target
+        )
+      ) {
+        closeDropdown();
+      }
     }
+  );
 
-    // If value no longer starts with dial code => code removed
-    if (!input.value.startsWith(dial)) {
-      input.value = "";
-      input.readOnly = true;
-      countrySelected = false;
-      input.dataset.currentCode = "";
-      input.dataset.currentDial = "";
+  /*
+    Protect the selected country code.
+  */
+  input.addEventListener(
+    "input",
+    () => {
+      const dial =
+        input.dataset.currentDial ||
+        "";
+
+      if (
+        !dial ||
+        !countrySelected
+      ) {
+        input.value = "";
+
+        input.readOnly =
+          true;
+
+        countrySelected =
+          false;
+
+        input.dataset.currentDial =
+          "";
+
+        input.dataset.currentCode =
+          "";
+
+        return;
+      }
+
+      /*
+        Allow local number digits only.
+      */
+      if (
+        !input.value.startsWith(
+          dial
+        )
+      ) {
+        input.value =
+          dial;
+
+        return;
+      }
+
+      const local =
+        input.value
+          .slice(
+            dial.length
+          )
+          .replace(
+            /\D/g,
+            ""
+          );
+
+      input.value =
+        dial +
+        local;
     }
-  });
+  );
 
-  // No default country now — user must select a country first
+  /*
+    Prevent deleting the country code
+    with Backspace/Delete.
+  */
+  input.addEventListener(
+    "keydown",
+    (event) => {
+      const dial =
+        input.dataset.currentDial ||
+        "";
+
+      if (!dial) return;
+
+      const start =
+        input.selectionStart || 0;
+
+      const end =
+        input.selectionEnd || 0;
+
+      if (
+        event.key ===
+          "Backspace" &&
+        start <=
+          dial.length
+      ) {
+        event.preventDefault();
+
+        input.setSelectionRange(
+          dial.length,
+          dial.length
+        );
+      }
+
+      if (
+        event.key ===
+          "Delete" &&
+        start <
+          dial.length
+      ) {
+        event.preventDefault();
+
+        input.setSelectionRange(
+          dial.length,
+          Math.max(
+            dial.length,
+            end
+          )
+        );
+      }
+    }
+  );
 }
-
